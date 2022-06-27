@@ -30,26 +30,27 @@ public:
 
 		this->frame_width = ImGui::GetContentRegionAvail().x;
 		this->frame_height = ImGui::GetContentRegionAvail().y;
-
-		//this->render();
 		
-		auto frame = this->renderer.getOutput();
-		if (frame) {
-			ImGui::Image(frame->GetDescriptorSet(), { (float)frame->GetWidth(), (float)frame->GetHeight() }, ImVec2(0, 1), ImVec2(1, 0));
+		if (this->frame_width * this->frame_height > 0) {
+			auto frame = this->render();
+			if (frame) {
+				ImGui::Image(frame->GetDescriptorSet(), { (float)frame->GetWidth(), (float)frame->GetHeight() }, ImVec2(0, 1), ImVec2(1, 0));
+			}
 		}
 
 		ImGui::End();
 
-		this->render();
+		//this->render();
 
 		//ImGui::ShowDemoWindow();
 	}
 protected:
-	void render() {
+	std::shared_ptr<Walnut::Image> render() {
 		Walnut::Timer time;
 		this->renderer.resize(this->frame_width, this->frame_height);
 		this->renderer.render();
 		this->ltime = time.ElapsedMillis();
+		return this->renderer.getOutput();
 	}
 
 private:
