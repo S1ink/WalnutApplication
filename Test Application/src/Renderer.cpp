@@ -46,42 +46,54 @@ void Renderer::render(const Scene& scene, const Camera& cam) {
 }
 glm::vec4 Renderer::traceRay(const Scene& scene, const Ray& ray) {
 
-	const Sphere* target;
+	constexpr size_t MAX_BOUNCES = 1;
+
+	const Object* target;
+	bool direct = false;
 	Ray ref = ray;
-	float a, b, c, d, q, l, t;	// a, b, c, discriminent, hit time, "lightness", target hit time
-	glm::vec3 o, hp, n, clr{0};
-	for (size_t bounce = 0; bounce < 3; bounce++) {	// for up to 3 possible reflective bounces
+	float q, t;	// hit time, "lightness", target hit time
+	glm::vec3 hp, n, clr{0}, l;
+	for (size_t bounce = 0; bounce < MAX_BOUNCES; bounce++) {	// for up to 3 possible reflective bounces
 		target = nullptr;
 		t = std::numeric_limits<float>::max();
-		for (const Sphere& obj : scene.spheres) {		// test interestion of all objects, get closest time
-			o = ref.origin - obj.position;
-			a = glm::dot(ref.direction, ref.direction);
-			b = 2.f * glm::dot(o, ref.direction);
-			c = glm::dot(o, o) - (obj.rad * obj.rad);
-			d = (b * b) - 4.f * a * c;
-			if (d < 0.f) { continue; }	// no interestion, continue to next obj
-
-			float q = (-sqrtf(d) - b) / (2 * a);	// closest hit time
-			// float q1 = (sqrtf(disc) - b) / (2 * a),	// secondary hit - other part of quad
-
+		for (const Object* obj : scene.objects) {		// test interestion of all objects, get closest time
+			q = obj->calcIntersection(ref);
 			if (q < t && q > 0) {
 				t = q;
-				target = &obj;
+				target = obj;
 			}
 		}
-		if (target == nullptr) { return glm::vec4{ clr, 1.f }; }	// no interestions, return whatever was previously stored in clr (default black)
+		for (const Object* light : scene.lights) {
+			q = light->calcIntersection(ref);
+			if (q < t && q > 0) {
+				t = q;
+				target = light;
+				direct = true;
+			}
+		}
+		if (!target) { return glm::vec4{ clr, 1.f }; }	// no interestions, return whatever was previously stored in clr (default black)
 
-		o = ref.origin - target->position;
-		hp = o + ref.direction * t;
-		n = glm::normalize(hp);		// normalized hit vector
+		hp = ref.origin + ref.direction * t;
+		n = target->calcNormal(hp);
 
-		l = glm::max(glm::dot(n, -glm::normalize(this->light + target->position)), 0.f);
-		clr += target->albedo * l * ((3 - bounce) / 3.f);
+		if (!direct) {
+			float luminance = 0;
+			for (const Object* light : scene.lights) {
+				//l += light->albedo * glm::max(glm::dot(n, -glm::normalize(hp - light->position)), 0.f) * (1.f / ((hp - light->position) * (hp - light->position)));
+				float lm = glm::max(glm::dot(n, -glm::normalize(hp - light->position)), 0.f);
+				l += light->albedo * lm;
+				luminance += lm;
+			}
+			l /= scene.lights.size();
+			clr += l + luminance * target->albedo;
+		} else {
+			clr = target->albedo * (float)pow(glm::dot(n, glm::normalize(ref.origin - hp)), 2) * 2.f;
+			return glm::vec4{ clr, 1.f };
+		}
 
-		if (bounce + 1 < 3) {
-			glm::vec3 norm = glm::normalize(hp);
-			ref.direction = (ref.direction - 2 * glm::dot(ref.direction, norm) * norm);
-			ref.origin = (hp);
+		if (bounce + 1 < MAX_BOUNCES) {
+			ref.direction = (ref.direction - 2 * glm::dot(ref.direction, n) * n);
+			ref.origin = hp;
 		}
 
 	}

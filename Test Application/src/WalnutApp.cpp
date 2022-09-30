@@ -17,8 +17,28 @@ class RenderLayer : public Walnut::Layer
 public:
 	RenderLayer() : scene{
 		{
-			Sphere{glm::vec3{0.f, 0.f, 0.f}, 0.5f, glm::vec3{1.f, 0.f, 1.f}},
-			Sphere{glm::vec3{0.f, 0.f, -5.f}, 0.75f, glm::vec3{0.f, 1.f, 1.f}}
+			new Sphere(glm::vec3{0.f, 0.f, 0.f}, glm::vec3{1.f, 0.f, 1.f}, 0.5f),
+			new Sphere(glm::vec3{5.f, 0.f, 0.f}, glm::vec3{1.f, 1.f, 0.f}, 0.8f),
+			new Sphere(glm::vec3{0.f, 0.f, -5.f}, glm::vec3{0.f, 1.f, 1.f}, 0.75f),
+			new Triangle(
+				glm::vec3{4, 5, 6}, glm::vec3{7, 4, 7}, glm::vec3{6, 5, 4}, glm::vec3{0.8, 0.5, 0})
+			//new Triangle(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),
+			//new Triangle(glm::vec3{1, 1, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),
+			//new Triangle(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0}),
+			//new Triangle(glm::vec3{0, 1, 1}, glm::vec3{0, 1, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0}),
+			//new Triangle(glm::vec3{0, 0, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0}),
+			//new Triangle(glm::vec3{1, 0, 1}, glm::vec3{1, 0, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0})
+			/*,
+			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
+			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
+			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
+			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
+			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
+			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0})*/
+		},
+		{
+			new Sphere(glm::vec3{0}, glm::vec3{1.f}),
+			new Sphere(glm::vec3{-4.f, 3.f, 2.f}, glm::vec3{0.f, 1.f, 0.5f})
 		}
 	} {}
 
@@ -35,12 +55,14 @@ public:
 			ImGui::Text("FPS: %.3f", 1e9 / (hrc::now() - ref).count());
 			ref = hrc::now();
 			ImGui::Separator();
-			for (size_t i = 0; i < this->scene.spheres.size(); i++) {
+			for (size_t i = 0; i < this->scene.objects.size(); i++) {
 				ImGui::PushID(i);
 				if (ImGui::CollapsingHeader(("Obj " + std::to_string(i)).c_str())) {
-					ImGui::DragFloat3("Position", glm::value_ptr(this->scene.spheres[i].position), 0.1);
-					ImGui::DragFloat("Size", &this->scene.spheres[i].rad, 0.1);
-					ImGui::ColorEdit3("Albedo", glm::value_ptr(this->scene.spheres[i].albedo));
+					ImGui::DragFloat3("Position", glm::value_ptr(this->scene.objects[i]->position), 0.1);
+					if (Sphere* s = dynamic_cast<Sphere*>(this->scene.objects[i])) {
+						ImGui::DragFloat("Size", &s->rad, 0.1);
+					}
+					ImGui::ColorEdit3("Albedo", glm::value_ptr(this->scene.objects[i]->albedo));
 				}
 				ImGui::PopID();
 			}

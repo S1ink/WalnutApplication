@@ -15,11 +15,6 @@
 //	inline glm::vec3 position() const { return glm::vec3(*this); }
 //};
 
-struct Ray {
-	glm::vec3 origin;
-	glm::vec3 direction;
-};
-
 class Renderer {
 public:
 	Renderer() = default;
@@ -31,14 +26,28 @@ public:
 
 protected:
 	glm::vec4 traceRay(const Scene&, const Ray&);
+	/*struct HitInfo {
+		float distance;
+		glm::vec3 world_pos;
+		glm::vec3 world_normal;
+
+		uint32_t obj_index;
+	};
+
+	glm::vec4 compPixel();
+
+	HitInfo traceRay(const Ray&);
+	HitInfo closestHit(const Ray&, float, uint32_t);
+	HitInfo miss(const Ray&);*/
+
 
 private:
 	std::shared_ptr<Walnut::Image> image;
+
+	const Scene* active_scene{ nullptr };
+	const Camera* active_camera{ nullptr };
+
 	uint32_t* buffer = nullptr;
-	const glm::vec3
-		light{-1.f, -1.f, -1.f},
-		color{ 0, 1, 0 }
-	;
 	float ratio;
 
 
