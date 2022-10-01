@@ -22,12 +22,12 @@ struct Object {
 	float alpha{ 0.5 };			// represents reflectivity for objects or "brightness" for light sources
 
 	virtual float calcIntersection(const Ray&) const = 0;		// return time of intersection or 0 if none exists
-	virtual glm::vec3 calcNormal(glm::vec3 hit) const = 0;	// return normal vector at point of intersection
+	virtual glm::vec3 calcNormal(glm::vec3 hit, glm::vec3 raydir) const = 0;	// return normal vector at point of intersection
 };
 
 struct Sphere : public Object {
-	Sphere(glm::vec3 p = glm::vec3{0.f}, glm::vec3 c = glm::vec3{ 1.f }, float rad = 0.5f, float r = 0.5f) :
-		Object{ p, c, r }, rad(rad) {}
+	Sphere(glm::vec3 p = glm::vec3{0.f}, glm::vec3 c = glm::vec3{ 1.f }, float rad = 0.5f, float a = 0.5f) :
+		Object{ p, c, a }, rad(rad) {}
 
 	float rad{ 0.5f };
 	
@@ -41,7 +41,7 @@ struct Sphere : public Object {
 		if (d < 0.f) { return 0; }
 		return (sqrt(d) + b) / (-2.f * a);
 	}
-	inline glm::vec3 calcNormal(glm::vec3 hit) const override {
+	inline glm::vec3 calcNormal(glm::vec3 hit, glm::vec3) const override {
 		return glm::normalize(hit - this->position);
 	}
 };
@@ -60,16 +60,16 @@ struct Triangle : public Object {
 		p1(p1), p2(p2), p3(p3), e1(p2 - p1), e2(p3 - p1),
 		norm(glm::normalize(glm::cross(this->e1, this->e2))) {}
 
-	glm::vec3 p1, p2, p3, e1, e2;
-	mutable glm::vec3 norm;
+	glm::vec3 p1, p2, p3, e1, e2, norm;
 
 	inline float calcIntersection(const Ray& ray) const override {
+		constexpr float EPSILON = 1e-5f;
 		glm::vec3 h, s, q;
 		float a, f, u, v;
 
 		h = glm::cross(ray.direction, this->e2);
 		a = glm::dot(this->e1, h);
-		if (a > -1e-7 && a < 1e-7) { return 0; }
+		if (a > -EPSILON && a < EPSILON) { return 0; }
 
 		f = 1.f / a;
 		s = ray.origin - p1;
@@ -78,17 +78,16 @@ struct Triangle : public Object {
 
 		q = glm::cross(s, this->e1);
 		v = f * glm::dot(ray.direction, q);
-		if (v < 0 || u + v > 1) { return 0; }
+		if (v < 0.f || u + v > 1.f) { return 0; }
 
 		float t = f * glm::dot(this->e2, q);
-		if (t > 1e-7) {
-			this->norm *= -sgn(glm::dot(this->norm, ray.direction));
+		if (t > EPSILON) {
 			return t;
 		}
 		return 0.f;
 	}
-	inline glm::vec3 calcNormal(glm::vec3 hit) const override {
-		return this->norm;
+	inline glm::vec3 calcNormal(glm::vec3 hit, glm::vec3 rd) const override {
+		return this->norm * -sgn(glm::dot(this->norm, rd));
 	}
 };
 

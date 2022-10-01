@@ -26,19 +26,19 @@ public:
 
 protected:
 	glm::vec4 traceRay(const Scene&, const Ray&);
-	/*struct HitInfo {
+	
+	struct RayResult {
+		bool is_source{ false };
+		int32_t objectid;
 		float distance;
-		glm::vec3 world_pos;
-		glm::vec3 world_normal;
-
-		uint32_t obj_index;
+		glm::vec3
+			w_position,
+			w_normal;
 	};
-
-	glm::vec4 compPixel();
-
-	HitInfo traceRay(const Ray&);
-	HitInfo closestHit(const Ray&, float, uint32_t);
-	HitInfo miss(const Ray&);*/
+	glm::vec4 computePixel(size_t);
+	RayResult traceRay(const Ray&);
+	RayResult traceClosest(const Ray&, float, int32_t, bool = false);
+	RayResult traceMiss(const Ray&);
 
 
 private:
@@ -48,7 +48,8 @@ private:
 	const Camera* active_camera{ nullptr };
 
 	uint32_t* buffer = nullptr;
-	float ratio;
+
+	Ray raybuff;
 
 
 };
