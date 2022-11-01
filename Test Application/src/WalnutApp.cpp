@@ -17,15 +17,15 @@ class RenderLayer : public Walnut::Layer
 public:
 	RenderLayer() : scene{
 		{
-			new Sphere(glm::vec3{0.f, 0.f, 0.f}, glm::vec3{1.f, 0.f, 1.f}, 0.5f),
-			new Sphere(glm::vec3{5.f, 0.f, 0.f}, glm::vec3{1.f, 1.f, 0.f}, 0.8f),
-			new Sphere(glm::vec3{0.f, 0.f, -5.f}, glm::vec3{0.f, 1.f, 1.f}, 0.75f),
+			new Sphere(glm::vec3{0.f, 0.f, 0.f}, glm::vec3{1.f, 0.f, 1.f}, 0.5f, 0.05f),
+			new Sphere(glm::vec3{5.f, 0.f, 0.f}, glm::vec3{1.f, 1.f, 0.f}, 0.8f, 0.05f),
+			new Sphere(glm::vec3{0.f, 0.f, -5.f}, glm::vec3{0.f, 1.f, 1.f}, 0.75f, 0.05f)/*,
 			new Triangle(
 				glm::vec3{100, -3, 100}, glm::vec3{-100, -3, 100}, glm::vec3{-100, -3, -100}, glm::vec3{1}
 			),
 			new Triangle(
 				glm::vec3{100, -3, 100}, glm::vec3{100, -3, -100}, glm::vec3{-100, -3, -100}, glm::vec3{1}
-			)
+			)*/
 			/*new Triangle(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),
 			new Triangle(glm::vec3{1, 1, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),
 			new Triangle(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0}),
@@ -42,9 +42,9 @@ public:
 		},
 		{
 			new Sphere(glm::vec3{0}, glm::vec3{1.f}),
-			new Sphere(glm::vec3{-4.f, 3.f, 2.f}, glm::vec3{0.f, 1.f, 0.5f}, 1.f),
+			new Sphere(glm::vec3{-4.f, 3.f, 2.f}, glm::vec3{0.f, 1.f, 0.5f}, 1.f)/*,
 			new Triangle(
-				glm::vec3{4, 5, 6}, glm::vec3{7, 4, 7}, glm::vec3{6, 5, 4}, glm::vec3{0.8, 0.5, 0})
+				glm::vec3{4, 5, 6}, glm::vec3{7, 4, 7}, glm::vec3{6, 5, 4}, glm::vec3{0.8, 0.5, 0})*/
 		}
 	} {}
 
@@ -73,6 +73,8 @@ public:
 						ImGui::DragFloat("Size", &s->rad, 0.1);
 					}
 					ImGui::ColorEdit3("Albedo", glm::value_ptr(this->scene.objects[i]->albedo));
+					ImGui::DragFloat("Roughness", &this->scene.objects[i]->roughness);
+					ImGui::DragFloat("Matallic", &this->scene.objects[i]->metallic);
 				}
 				ImGui::PopID();
 			}

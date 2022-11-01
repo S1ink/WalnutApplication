@@ -60,37 +60,41 @@ glm::vec4 Renderer::computePixel(size_t n) {
 	this->raybuff.origin = this->active_camera->GetPosition();
 	this->raybuff.direction = this->active_camera->GetRayDirections()[n];
 
-	constexpr size_t MAX_BOUNCES = 3;
 	float amount = 1.f;
 	glm::vec3 clr{ 0.f };
 	for (size_t b = 0; b < MAX_BOUNCES; b++) {
 		RayResult result = this->traceRay(this->raybuff);
 		if (result.distance == -1) {
-			clr += glm::vec3{ 0.f } * amount;
+			clr += SKY_COLOR * amount;
 			break;
 		}
 		if (result.is_source) {
-			clr += this->active_scene->lights[result.objectid]->albedo * (float)pow(glm::dot(result.w_normal, -this->raybuff.direction) * 1.25f, 2) * amount;
-			this->raybuff.origin = result.w_position + this->raybuff.direction * 1e-4f;
+			float directness = (float)pow(glm::dot(result.w_normal, -this->raybuff.direction) * 1.25f, 2);
+			clr += this->active_scene->lights[result.objectid]->albedo * directness * amount;
+			this->raybuff.origin = result.w_position + this->raybuff.direction * NO_COLLIDE_DIST;
+			if (directness > 1) {
+				amount /= directness;
+			}
 			continue;
 		}
 		float lightness = 0.f;
-		constexpr float BRIGHTNESS_CONSTANT = 20.f;
 		glm::vec3
-			no_collide = result.w_position + result.w_normal * 1e-4f,
+			no_collide = result.w_position + result.w_normal * NO_COLLIDE_DIST,
 			to_light;
 		for (const Object* light : this->active_scene->lights) {
-			to_light = glm::normalize(result.w_position - light->position);
+			to_light = glm::normalize(result.w_position - light->position) + this->active_scene->objects[result.objectid]->roughness * Walnut::Random::Vec3(-0.5f, 0.5f);
 			float ldist = glm::distance(result.w_position, light->position);
 			if (this->traceRay(Ray{ result.w_position, -to_light }).is_source) {
-				lightness += glm::max(glm::dot(result.w_normal, -to_light), 0.f) / pow(ldist, 2) * light->alpha * BRIGHTNESS_CONSTANT;
+				lightness += glm::max(glm::dot(result.w_normal, -to_light), 0.f) / pow(ldist, 2) * light->roughness * BRIGHTNESS_CONSTANT;
 			}
 		}
 		clamp(lightness, 1.f, 0.f);
 		clr += this->active_scene->objects[result.objectid]->albedo * lightness * amount;
 		amount *= 0.7;
 		this->raybuff.origin = no_collide;
-		this->raybuff.direction = glm::reflect(this->raybuff.direction, result.w_normal);
+		this->raybuff.direction = glm::reflect(this->raybuff.direction, result.w_normal
+			+ this->active_scene->objects[result.objectid]->roughness * Walnut::Random::Vec3(-0.5f, 0.5f)
+		);
 	}
 	return glm::vec4{ clr, 1.f };
 }

@@ -42,6 +42,12 @@ protected:
 
 
 private:
+	constexpr static inline glm::vec3 SKY_COLOR{ 0.8f };
+	constexpr static inline size_t MAX_BOUNCES{ 3U };
+	constexpr static inline float
+		BRIGHTNESS_CONSTANT{ 20.f },
+		NO_COLLIDE_DIST{ 1e-4f };
+
 	std::shared_ptr<Walnut::Image> image;
 
 	const Scene* active_scene{ nullptr };

@@ -14,12 +14,12 @@ struct Ray {
 };
 
 struct Object {
-	Object(glm::vec3 p = glm::vec3{ 0.f }, glm::vec3 c = glm::vec3{ 1.f }, float a = 0.5f) :
-		position(p), albedo(c), alpha(a) {}
+	Object(glm::vec3 p = glm::vec3{ 0.f }, glm::vec3 c = glm::vec3{ 1.f }, float rgh = 0.5f, float mtl = 0.5f) :
+		position(p), albedo(c), roughness(rgh), metallic(mtl) {}
 	~Object() = default;
 
 	glm::vec3 position{ 0.f }, albedo{ 1.f };
-	float alpha{ 0.5 };			// represents reflectivity for objects or "brightness" for light sources
+	float roughness{0.5f}, metallic{0.5f};
 
 	virtual float calcIntersection(const Ray&) const = 0;		// return time of intersection or 0 if none exists
 	virtual glm::vec3 calcNormal(glm::vec3 hit, glm::vec3 raydir) const = 0;	// return normal vector at point of intersection
