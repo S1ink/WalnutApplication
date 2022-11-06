@@ -43,7 +43,21 @@ void Renderer::render(const Scene& scene, const Camera& cam) {
 				0.f, 1.f
 			));
 	}
-	//this->image->SetData(this->buffer);
+
+}
+void Renderer::renderUnshaded(const Scene& scene, const Camera& cam) {
+
+	this->active_scene = &scene;
+	this->active_camera = &cam;
+
+	uint32_t sz = this->image->GetWidth() * this->image->GetHeight();
+	for (uint32_t n = 0; n < sz; n++) {
+		this->buffer[n] =
+			vec2rgba(glm::clamp(
+				this->computeUnshaded(n),
+				0.f, 1.f
+			));
+	}
 
 }
 
@@ -53,6 +67,16 @@ glm::vec4 Renderer::computePixel(size_t n) {
 		this->active_camera->GetRayDirections()[n]
 	};
 	return glm::vec4{ this->evaluateRay(ray), 1.f };
+}
+glm::vec4 Renderer::computeUnshaded(size_t n) {
+	Ray ray{
+		this->active_camera->GetPosition(),
+		this->active_camera->GetRayDirections()[n]
+	};
+	RayResult result = this->traceRay(ray);
+	if (result.distance == -1) { return glm::vec4{ SKY_COLOR, 1.f }; }
+	if (result.is_source) { return glm::vec4{ this->active_scene->lights[result.objectid]->albedo, 1.f }; }
+	return glm::vec4{ this->active_scene->objects[result.objectid]->albedo, 1.f };
 }
 glm::vec3 Renderer::evaluateRay(const Ray& r, size_t bounce, float a) {
 	float amount = a;

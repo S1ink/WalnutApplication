@@ -7,18 +7,28 @@
 
 
 inline float sgn(float v) { return (int)(v > 0) - (int)(v < 0); }
+inline static glm::vec3 center(std::initializer_list<glm::vec3> pts) {
+	glm::vec3 ret;
+	for (glm::vec3 pt : pts) {
+		ret += pt;
+	}
+	return (ret /= pts.size());
+}
 
 struct Ray {
 	glm::vec3 origin;
 	glm::vec3 direction;
 };
 
+
 struct Material {
 	float
-		roughness{ 0.1 },
-		metallic{ 0.5 };
+		roughness{ 0.f },
+		metallic{ 0.f },
+		luminance{ 0.f };
 };
-static constexpr Material _DEFAULT_MAT{ 0.1, 0.5 };
+static constexpr Material _DEFAULT_MAT{ 0.2f, 0.f, 0.f };
+
 struct Object {
 	Object(
 		glm::vec3 p = glm::vec3{ 0.f },
@@ -30,9 +40,15 @@ struct Object {
 	glm::vec3 position{ 0.f }, albedo{ 1.f };
 	const Material* mat;
 
+	inline virtual glm::vec3 getColor(glm::vec3) const { return this->albedo; }
+	inline virtual void moveTo(glm::vec3 p) { this->position = p; }
+	inline virtual void invokeOptions() {}
+
 	virtual float intersectionTime(const Ray&) const = 0;		// return time of intersection or 0 if none exists
 	virtual glm::vec3 calcNormal(glm::vec3 hit, glm::vec3 raydir) const = 0;	// return normal vector at point of intersection
+
 };
+
 
 struct Sphere : public Object {
 	Sphere(
@@ -43,71 +59,51 @@ struct Sphere : public Object {
 	) : Object{ p, c, m }, rad(r) {}
 
 	float rad{ 0.5f };
+
+	void invokeOptions() override;
 	
-	inline float intersectionTime(const Ray& ray) const override {
-		glm::vec3 o = ray.origin - this->position;
-		float
-			a = glm::dot(ray.direction, ray.direction),
-			b = 2.f * glm::dot(o, ray.direction),
-			c = glm::dot(o, o) - (this->rad * this->rad),
-			d = (b * b) - 4.f * a * c;
-		if (d < 0.f) { return 0; }
-		return (sqrt(d) + b) / (-2.f * a);
-	}
-	inline glm::vec3 calcNormal(glm::vec3 hit, glm::vec3) const override {
-		return glm::normalize(hit - this->position);
-	}
+	float intersectionTime(const Ray&) const override;
+	inline glm::vec3 calcNormal(glm::vec3 hit, glm::vec3) const override
+		{ return glm::normalize(hit - this->position); }
 };
-
 struct Triangle : public Object {
-	inline static glm::vec3 center(std::initializer_list<glm::vec3> pts) {
-		glm::vec3 ret;
-		for (glm::vec3 pt : pts) {
-			ret += pt;
-		}
-		return (ret /= pts.size());
-	}
-
 	Triangle(
 		glm::vec3 p1, glm::vec3 p2, glm::vec3 p3,
 		glm::vec3 c, const Material* m = &_DEFAULT_MAT
-	) : 
-		Object(center({p1, p2, p3}), c, m),
-		p1(p1), p2(p2), p3(p3), e1(p2 - p1), e2(p3 - p1),
-		norm(glm::normalize(glm::cross(this->e1, this->e2)))
-	{}
+	) : Object(center({ p1, p2, p3 }), c, m), p1(p1), p2(p2), p3(p3),
+		e1(p2 - p1), e2(p3 - p1), norm(glm::normalize(glm::cross(this->e1, this->e2))) {}
 
 	glm::vec3
 		p1, p2, p3,
 		e1, e2, norm;
 
-	inline float intersectionTime(const Ray& ray) const override {
-		constexpr float EPSILON = 1e-5f;
-		glm::vec3 h, s, q;
-		float a, f, u, v;
+	void moveTo(glm::vec3) override;
+	void invokeOptions() override;
 
-		h = glm::cross(ray.direction, this->e2);
-		a = glm::dot(this->e1, h);
-		if (a > -EPSILON && a < EPSILON) { return 0; }
+	float intersectionTime(const Ray&) const override;
+	inline glm::vec3 calcNormal(glm::vec3, glm::vec3 rd) const override
+		{ return this->norm * -sgn(glm::dot(this->norm, rd)); }
+};
+struct Quad : public Object {
+	Quad(
+		glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 p4,
+		glm::vec3 c = glm::vec3{ 1.f }, const Material* m = &_DEFAULT_MAT
+	) : Object(center({ p1, p2, p3, p4 }), c, m), h1(p1, p2, p4, c, m), h2(p3, p2, p4, c, m) {}
 
-		f = 1.f / a;
-		s = ray.origin - p1;
-		u = f * glm::dot(s, h);
-		if (u < 0.f || u > 1.f) { return 0; }
+	Triangle h1, h2;
 
-		q = glm::cross(s, this->e1);
-		v = f * glm::dot(ray.direction, q);
-		if (v < 0.f || u + v > 1.f) { return 0; }
+	void moveTo(glm::vec3) override;
+	void invokeOptions() override;
 
-		float t = f * glm::dot(this->e2, q);
-		if (t > EPSILON) {
-			return t;
-		}
-		return 0.f;
-	}
-	inline glm::vec3 calcNormal(glm::vec3 hit, glm::vec3 rd) const override {
-		return this->norm * -sgn(glm::dot(this->norm, rd));
-	}
+	float intersectionTime(const Ray&) const override;
+	inline glm::vec3 calcNormal(glm::vec3 hit, glm::vec3 rd) const override
+		{ return this->h1.calcNormal(hit, rd); }
+};
+
+enum ObjType {
+	SPHERE = 0,
+	TRIANGLE = 1,
+	QUAD = 2
 };
 
 struct Scene {
@@ -118,6 +114,9 @@ struct Scene {
 	}
 
 	std::vector<Object*> objects;
+	std::vector<int> obj_mats;
+	std::vector<Material> materials;
+
 	std::vector<Object*> lights;
 
 };

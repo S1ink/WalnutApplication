@@ -12,6 +12,7 @@
 #include "Renderer.h"
 #include "Camera.h"
 #include "Scene.h"
+#include "Objects.h"
 
 
 class RenderLayer : public Walnut::Layer
@@ -19,38 +20,20 @@ class RenderLayer : public Walnut::Layer
 public:
 	RenderLayer() : scene{
 		{
-			new Sphere(glm::vec3{0.f, 0.f, 0.f}, 0.5f, glm::vec3{1.f, 0.f, 1.f}),
-			new Sphere(glm::vec3{5.f, 0.f, 0.f}, 0.8f, glm::vec3{1.f, 1.f, 0.f}),
-			new Sphere(glm::vec3{0.f, 0.f, -5.f}, 0.75f, glm::vec3{0.f, 1.f, 1.f})/*,
-			new Triangle(
-				glm::vec3{100, -3, 100}, glm::vec3{-100, -3, 100}, glm::vec3{-100, -3, -100}, glm::vec3{1}
-			),
-			new Triangle(
-				glm::vec3{100, -3, 100}, glm::vec3{100, -3, -100}, glm::vec3{-100, -3, -100}, glm::vec3{1}
-			)*/
-			/*new Triangle(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{1, 1, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{0, 1, 1}, glm::vec3{0, 1, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{0, 0, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{1, 0, 1}, glm::vec3{1, 0, 0}, glm::vec3{0, 0, 1}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0}),
-			new Triangle(glm::vec3{}, glm::vec3{}, glm::vec3{}, glm::vec3{0, 1, 0})*/
+			objects
 		},
 		{
-			new Sphere(),
+			std::vector<int>((int)this->scene.objects.size(), -1)
+		},
+		{
+			{1}
+		},
+		{
+			new Sphere(glm::vec3{-1, -1, -1}),
 			new Sphere(glm::vec3{-4.f, 3.f, 2.f}, 1.f, glm::vec3{0.f, 1.f, 0.5f})/*,
 			new Triangle(
 				glm::vec3{4, 5, 6}, glm::vec3{7, 4, 7}, glm::vec3{6, 5, 4}, glm::vec3{0.8, 0.5, 0})*/
 		}
-	},
-	obj_mats{(int)this->scene.objects.size(), -1},
-	materials{
-		1
 	} {}
 
 
@@ -74,14 +57,27 @@ public:
 				if (this->desync_render = !this->desync_render) {
 					this->rendt = std::move(std::thread([this]() {
 						while (this->desync_render) {
-							this->renderer.resize(this->frame_width, this->frame_height);
-							this->camera.OnResize(this->frame_width, this->frame_height);
-							this->renderer.render(this->scene, this->camera);
+							if (this->paused) {
+								std::this_thread::sleep_for(std::chrono::milliseconds(100));
+							} else {
+								this->renderer.resize(this->frame_width, this->frame_height);
+								this->camera.OnResize(this->frame_width, this->frame_height);
+								if (this->unshaded) {
+									this->renderer.renderUnshaded(this->scene, this->camera);
+								}
+								else {
+									this->renderer.render(this->scene, this->camera);
+								}
+							}
 						}
 					}));
 				} else {
 					this->rendt.join();
 				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button(this->unshaded ? "Enable RT" : "Disable RT")) {
+				this->unshaded = !this->unshaded;
 			}
 			ImGui::Separator();
 			ImGui::ColorEdit3("Sky Color", glm::value_ptr(Renderer::SKY_COLOR));
@@ -91,27 +87,24 @@ public:
 			for (size_t i = 0; i < this->scene.objects.size(); i++) {
 				ImGui::PushID(i);
 				if (ImGui::CollapsingHeader(("Obj " + std::to_string(i)).c_str())) {
-					ImGui::DragFloat3("Position", glm::value_ptr(this->scene.objects[i]->position), 0.1);
-					if (Sphere* s = dynamic_cast<Sphere*>(this->scene.objects[i])) {
-						ImGui::DragFloat("Size", &s->rad, 0.1);
-					}
-					ImGui::ColorEdit3("Albedo", glm::value_ptr(this->scene.objects[i]->albedo));
-					if (ImGui::DragInt("Material ID", &this->obj_mats[i], 1.f, -1, (int)this->materials.size() - 1) && this->obj_mats[i] < this->materials.size()) {
-						this->scene.objects[i]->mat = (this->obj_mats[i] < 0 ? &_DEFAULT_MAT : &this->materials[this->obj_mats[i]]);
+					this->scene.objects[i]->invokeOptions();
+					if (ImGui::DragInt("Material ID", &this->scene.obj_mats[i], 1.f, -1, (int)this->scene.materials.size() - 1) && this->scene.obj_mats[i] < this->scene.materials.size()) {
+						this->scene.objects[i]->mat = (this->scene.obj_mats[i] < 0 ? &_DEFAULT_MAT : &this->scene.materials[this->scene.obj_mats[i]]);
 					}
 				}
 				ImGui::PopID();
 			}
 			ImGui::Separator;
-			for (size_t i = 0; i < this->materials.size(); i++) {
+			for (size_t i = 0; i < this->scene.materials.size(); i++) {
 				ImGui::PushID(i);
 				if (ImGui::CollapsingHeader(("Mat " + std::to_string(i)).c_str())) {
-					ImGui::DragFloat("Roughness", &this->materials[i].roughness, 0.005, 0.f, 1.f);
-					ImGui::DragFloat("Matallic", &this->materials[i].metallic, 0.005, 0.f, 1.f);
+					ImGui::DragFloat("Roughness", &this->scene.materials[i].roughness, 0.005, 0.f, 1.f);
+					ImGui::DragFloat("Matallic", &this->scene.materials[i].metallic, 0.005, 0.f, 1.f);
+					ImGui::DragFloat("Luminance", &this->scene.materials[i].luminance, 0.005, 0.f, 1.f);
 				}
 				ImGui::PopID();
 			}
-			if (ImGui::Button("Add Material")) { this->materials.emplace_back(); }
+			if (ImGui::Button("Add Material")) { this->scene.materials.emplace_back(); }
 
 		} ImGui::End();
 
@@ -137,7 +130,11 @@ protected:
 		if (!this->desync_render) {
 			this->renderer.resize(this->frame_width, this->frame_height);
 			this->camera.OnResize(this->frame_width, this->frame_height);
-			this->renderer.render(this->scene, this->camera);
+			if (this->unshaded) {
+				this->renderer.renderUnshaded(this->scene, this->camera);
+			} else {
+				this->renderer.render(this->scene, this->camera);
+			}
 		}
 		return this->renderer.getOutput();
 	}
@@ -146,8 +143,6 @@ private:
 	Renderer renderer;
 	Camera camera{60.f, 0.1f, 100.f};
 	Scene scene;
-	std::vector<int> obj_mats;
-	std::vector<Material> materials;
 	uint32_t frame_width = 0, frame_height = 0;
 	std::thread rendt;
 	
@@ -155,7 +150,7 @@ private:
 
 	float ltime = 0.f;
 	float lscroll = ImGui::GetIO().MouseWheel;
-	bool paused{ false }, desync_render{ false };
+	bool paused{ false }, desync_render{ false }, unshaded{ false };
 
 
 };

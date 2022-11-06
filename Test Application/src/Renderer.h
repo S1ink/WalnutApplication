@@ -21,6 +21,7 @@ public:
 
 	void resize(uint32_t, uint32_t);
 	void render(const Scene&, const Camera&);
+	void renderUnshaded(const Scene&, const Camera&);
 
 	inline std::shared_ptr<Walnut::Image> getOutput() const {
 		this->image->SetData(this->buffer);
@@ -44,6 +45,7 @@ protected:
 			w_normal;
 	};
 	glm::vec4 computePixel(size_t);
+	glm::vec4 computeUnshaded(size_t);
 	glm::vec3 evaluateRay(const Ray&, size_t = 0U, float = 1.f);
 	RayResult traceRay(const Ray&);
 	RayResult traceClosest(const Ray&, float, int32_t, bool = false);
