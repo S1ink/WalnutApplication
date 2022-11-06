@@ -13,25 +13,38 @@ struct Ray {
 	glm::vec3 direction;
 };
 
+struct Material {
+	float
+		roughness{ 0.1 },
+		metallic{ 0.5 };
+};
+static constexpr Material _DEFAULT_MAT{ 0.1, 0.5 };
 struct Object {
-	Object(glm::vec3 p = glm::vec3{ 0.f }, glm::vec3 c = glm::vec3{ 1.f }, float rgh = 0.5f, float mtl = 0.5f) :
-		position(p), albedo(c), roughness(rgh), metallic(mtl) {}
+	Object(
+		glm::vec3 p = glm::vec3{ 0.f },
+		glm::vec3 c = glm::vec3{ 1.f },
+		const Material* m = &_DEFAULT_MAT
+	) : position(p), albedo(c), mat(m) {}
 	~Object() = default;
 
 	glm::vec3 position{ 0.f }, albedo{ 1.f };
-	float roughness{0.5f}, metallic{0.5f};
+	const Material* mat;
 
-	virtual float calcIntersection(const Ray&) const = 0;		// return time of intersection or 0 if none exists
+	virtual float intersectionTime(const Ray&) const = 0;		// return time of intersection or 0 if none exists
 	virtual glm::vec3 calcNormal(glm::vec3 hit, glm::vec3 raydir) const = 0;	// return normal vector at point of intersection
 };
 
 struct Sphere : public Object {
-	Sphere(glm::vec3 p = glm::vec3{0.f}, glm::vec3 c = glm::vec3{ 1.f }, float rad = 0.5f, float a = 0.5f) :
-		Object{ p, c, a }, rad(rad) {}
+	Sphere(
+		glm::vec3 p = glm::vec3{ 0.f },
+		float r = 0.5f,
+		glm::vec3 c = glm::vec3{ 1.f },
+		const Material* m = &_DEFAULT_MAT
+	) : Object{ p, c, m }, rad(r) {}
 
 	float rad{ 0.5f };
 	
-	inline float calcIntersection(const Ray& ray) const override {
+	inline float intersectionTime(const Ray& ray) const override {
 		glm::vec3 o = ray.origin - this->position;
 		float
 			a = glm::dot(ray.direction, ray.direction),
@@ -55,14 +68,20 @@ struct Triangle : public Object {
 		return (ret /= pts.size());
 	}
 
-	Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 c, float a = 0.5f) :
-		Object(center({p1, p2, p3}),c, a),
+	Triangle(
+		glm::vec3 p1, glm::vec3 p2, glm::vec3 p3,
+		glm::vec3 c, const Material* m = &_DEFAULT_MAT
+	) : 
+		Object(center({p1, p2, p3}), c, m),
 		p1(p1), p2(p2), p3(p3), e1(p2 - p1), e2(p3 - p1),
-		norm(glm::normalize(glm::cross(this->e1, this->e2))) {}
+		norm(glm::normalize(glm::cross(this->e1, this->e2)))
+	{}
 
-	glm::vec3 p1, p2, p3, e1, e2, norm;
+	glm::vec3
+		p1, p2, p3,
+		e1, e2, norm;
 
-	inline float calcIntersection(const Ray& ray) const override {
+	inline float intersectionTime(const Ray& ray) const override {
 		constexpr float EPSILON = 1e-5f;
 		glm::vec3 h, s, q;
 		float a, f, u, v;
@@ -94,12 +113,8 @@ struct Triangle : public Object {
 struct Scene {
 	using Obj = std::unique_ptr<Object>;
 	inline ~Scene() {
-		for (Object* obj : this->objects) {
-			delete obj;
-		}
-		for (Object* light : this->lights) {
-			delete light;
-		}
+		for (Object* obj : this->objects) { delete obj; }
+		for (Object* light : this->lights) { delete light; }
 	}
 
 	std::vector<Object*> objects;
