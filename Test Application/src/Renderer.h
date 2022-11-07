@@ -38,8 +38,8 @@ protected:
 	
 	struct RayResult {
 		bool is_source{ false };
-		int32_t objectid;
-		float distance;
+		int32_t objectid{ -1 };
+		float distance{ -1 };
 		glm::vec3
 			w_position,
 			w_normal;

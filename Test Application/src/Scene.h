@@ -25,9 +25,12 @@ struct Material {
 	float
 		roughness{ 0.f },
 		metallic{ 0.f },
+		transparency{ 0.f },
 		luminance{ 0.f };
 };
-static constexpr Material _DEFAULT_MAT{ 0.2f, 0.f, 0.f };
+static constexpr Material
+	_DEFAULT_MAT{ 0.2f, 0.f, 0.f, 0.f },
+	_LIGHT_SOURCE{ 0.f, 0.f, 0.f, 1.f };
 
 struct Object {
 	Object(

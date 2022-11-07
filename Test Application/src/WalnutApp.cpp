@@ -29,10 +29,10 @@ public:
 			{1}
 		},
 		{
-			new Sphere(glm::vec3{-1, -1, -1}),
-			new Sphere(glm::vec3{-4.f, 3.f, 2.f}, 1.f, glm::vec3{0.f, 1.f, 0.5f})/*,
-			new Triangle(
-				glm::vec3{4, 5, 6}, glm::vec3{7, 4, 7}, glm::vec3{6, 5, 4}, glm::vec3{0.8, 0.5, 0})*/
+			//new Sphere(glm::vec3{-1, -1, -1}, 0.5, glm::vec3{ 1.f }, &_LIGHT_SOURCE),
+			//new Sphere(glm::vec3{-4.f, 3.f, 2.f}, 1.f, glm::vec3{0.f, 1.f, 0.5f}, &_LIGHT_SOURCE)/*,
+			//new Triangle(
+			//	glm::vec3{4, 5, 6}, glm::vec3{7, 4, 7}, glm::vec3{6, 5, 4}, glm::vec3{0.8, 0.5, 0})*/
 		}
 	} {}
 

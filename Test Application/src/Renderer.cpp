@@ -78,60 +78,115 @@ glm::vec4 Renderer::computeUnshaded(size_t n) {
 	if (result.is_source) { return glm::vec4{ this->active_scene->lights[result.objectid]->albedo, 1.f }; }
 	return glm::vec4{ this->active_scene->objects[result.objectid]->albedo, 1.f };
 }
-glm::vec3 Renderer::evaluateRay(const Ray& r, size_t bounce, float a) {
-	float amount = a;
-	float roughness = 0.f;
-	RayResult result;
-	Ray raybuff = r;
+//glm::vec3 Renderer::evaluateRay(const Ray& r, size_t bounce, float a) {
+//	float amount = a;
+//	float roughness = 0.f;
+//	RayResult result;
+//	Ray raybuff = r;
+//	glm::vec3 clr{ 0.f };
+//	for (size_t b = bounce; b < MAX_BOUNCES; b++) {
+//		if (roughness > 0.f) {
+//			glm::vec3 sum;
+//			Ray sample;
+//			for (size_t s = 0; s < SAMPLE_RAYS; s++) {
+//				sample = raybuff;
+//				sample.direction += (roughness * Walnut::Random::Vec3(-0.5f, 0.5f));
+//				sum += this->evaluateRay(sample, b, amount);
+//			}
+//			sum /= SAMPLE_RAYS;
+//			return glm::vec4{ sum + clr, 1.f };
+//		}
+//		else {
+//			result = this->traceRay(raybuff);
+//			if (result.distance == -1) {
+//				clr += SKY_COLOR * amount;
+//				break;
+//			}
+//			if (result.is_source) {
+//				float directness = (float)pow(glm::dot(result.w_normal, -raybuff.direction) * 1.25f, 2);
+//				clr += this->active_scene->lights[result.objectid]->albedo * directness * amount;
+//				raybuff.origin = result.w_position + raybuff.direction * NO_COLLIDE_DIST;
+//				if (directness > 1) {
+//					amount /= directness;
+//				}
+//				continue;
+//			}
+//			float lightness = 0.f;
+//			glm::vec3
+//				no_collide = result.w_position + result.w_normal * NO_COLLIDE_DIST,
+//				to_light;
+//			for (const Object* light : this->active_scene->lights) {
+//				to_light = glm::normalize(result.w_position - light->position);
+//					//+ this->active_scene->objects[result.objectid]->mat->roughness * Walnut::Random::Vec3(-0.5f, 0.5f);
+//				float ldist = glm::distance(result.w_position, light->position);
+//				if (this->traceRay(Ray{ result.w_position, -to_light }).is_source) {
+//					lightness += glm::max(glm::dot(result.w_normal, -to_light), 0.f) / pow(ldist, 2) * light->mat->luminance * BRIGHTNESS_CONSTANT;
+//				}
+//			}
+//			clamp(lightness, 1.f, 0.f);
+//			clr += this->active_scene->objects[result.objectid]->albedo * lightness * amount;
+//			amount *= 0.7;
+//			raybuff.origin = no_collide;
+//			raybuff.direction = glm::reflect(raybuff.direction, result.w_normal);
+//			//+ this->active_scene->objects[result.objectid]->mat->roughness * Walnut::Random::Vec3(-0.5f, 0.5f));
+//			roughness = this->active_scene->objects[result.objectid]->mat->roughness;
+//		}
+//	}
+//	return clr;
+//}
+glm::vec3 Renderer::evaluateRay(const Ray& r, size_t b, float a) {
 	glm::vec3 clr{ 0.f };
-	for (size_t b = bounce; b < MAX_BOUNCES; b++) {
-		if (roughness > 0.f) {
-			glm::vec3 sum;
-			Ray sample;
-			for (size_t s = 0; s < SAMPLE_RAYS; s++) {
-				sample = raybuff;
-				sample.direction += (roughness * Walnut::Random::Vec3(-0.5f, 0.5f));
-				sum += this->evaluateRay(sample, b, amount);
-			}
-			sum /= SAMPLE_RAYS;
-			return glm::vec4{ sum + clr, 1.f };
-		}
-		else {
-			result = this->traceRay(raybuff);
-			if (result.distance == -1) {
-				clr += SKY_COLOR * amount;
-				break;
-			}
-			if (result.is_source) {
-				float directness = (float)pow(glm::dot(result.w_normal, -raybuff.direction) * 1.25f, 2);
-				clr += this->active_scene->lights[result.objectid]->albedo * directness * amount;
-				raybuff.origin = result.w_position + raybuff.direction * NO_COLLIDE_DIST;
-				if (directness > 1) {
-					amount /= directness;
-				}
-				continue;
-			}
-			float lightness = 0.f;
-			glm::vec3
-				no_collide = result.w_position + result.w_normal * NO_COLLIDE_DIST,
-				to_light;
-			for (const Object* light : this->active_scene->lights) {
-				to_light = glm::normalize(result.w_position - light->position);
-					//+ this->active_scene->objects[result.objectid]->mat->roughness * Walnut::Random::Vec3(-0.5f, 0.5f);
-				float ldist = glm::distance(result.w_position, light->position);
-				if (this->traceRay(Ray{ result.w_position, -to_light }).is_source) {
-					lightness += glm::max(glm::dot(result.w_normal, -to_light), 0.f) / pow(ldist, 2) * light->mat->roughness * BRIGHTNESS_CONSTANT;
-				}
-			}
-			clamp(lightness, 1.f, 0.f);
-			clr += this->active_scene->objects[result.objectid]->albedo * lightness * amount;
-			amount *= 0.7;
-			raybuff.origin = no_collide;
-			raybuff.direction = glm::reflect(raybuff.direction, result.w_normal);
-			//+ this->active_scene->objects[result.objectid]->mat->roughness * Walnut::Random::Vec3(-0.5f, 0.5f));
-			roughness = this->active_scene->objects[result.objectid]->mat->roughness;
-		}
+	if (b > MAX_BOUNCES) { return clr; }
+	RayResult result = this->traceRay(r);
+	if (result.distance == -1) {	// sky "hit"
+		return SKY_COLOR;
+	}	// object hit
+	// add reflective value - multiplied by (1.f - roughness)
+	Object* obj = this->active_scene->objects[result.objectid];
+	float roughness = obj->mat->roughness;
+	Ray reflected{
+		result.w_position + result.w_normal * NO_COLLIDE_DIST,
+		glm::reflect(r.direction, result.w_normal)
+	};
+	if (roughness < 1.f) {
+		clr += this->evaluateRay(reflected, b + 1) * (1.f - roughness);
 	}
+	// add absorbed value - multiplied by (roughness)
+	if (roughness > 0.f) {
+		glm::vec3 sum{1.f};
+		Ray sample = reflected;
+		float lightness = 0.f;
+		for (const Object* o : this->active_scene->objects) {
+			if (o == obj || o->mat->luminance == 0.f) { continue; }
+			glm::vec3 direct = glm::normalize(o->position - result.w_position);
+			float dist = glm::distance(result.w_position, o->position);
+			sample.direction = direct;
+			if (this->active_scene->objects[this->traceRay(sample).objectid] == o) {
+				sum *= o->albedo;
+				lightness += glm::max(glm::dot(result.w_normal, direct), 0.f) / pow(dist, 2) * o->mat->luminance * BRIGHTNESS_CONSTANT;
+			}
+		}
+		clr += sum * obj->albedo * roughness * lightness;
+		sum = glm::vec3{ 0.f };
+		for (size_t s = 0; s < SAMPLE_RAYS; s++) {
+			sample.direction = reflected.direction + (roughness * Walnut::Random::Vec3(-0.5f, 0.5f));
+			sum += this->evaluateRay(sample, b + 1);
+		}
+		sum /= SAMPLE_RAYS;
+		clr += obj->albedo * sum * roughness;
+	}
+	// TODO: add diffusion calculation
+	glm::vec3 sum;
+	Ray sample{ reflected.origin, result.w_normal };
+	for (size_t s = 0; s < SAMPLE_RAYS; s++) {
+		sample.direction = result.w_normal + Walnut::Random::Vec3(-1.f, 1.f);
+		sum += this->evaluateRay(sample, b + 1);
+	}
+	sum /= SAMPLE_RAYS;
+	clr += obj->albedo * sum;
+	// add emmissive value
+	clr *= (1.f - obj->mat->luminance);
+	clr += obj->albedo * obj->mat->luminance;
 	return clr;
 }
 Renderer::RayResult Renderer::traceRay(const Ray& r) {
