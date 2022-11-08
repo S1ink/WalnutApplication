@@ -85,6 +85,7 @@ void Camera::OnUpdate(float ts)
 		moved = true;
 	}
 
+	this->last_hasmoved = moved;
 	if (moved)
 	{
 		RecalculateView();

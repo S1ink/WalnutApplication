@@ -4,6 +4,45 @@
 #include <glm/gtc/type_ptr.hpp>
 
 
+Ray Material::scatter(const Ray& src, const Ray& n) const {
+	float seed = Walnut::Random::Float();
+	if (seed < this->roughness) {
+		return diffuse(n);
+	} else if(seed < this->transparency) {
+		return refract(src, n, this->refraction_index);
+	} else {
+		return reflect(src, n, this->glossiness);
+	}
+}
+Ray Material::diffuse(const Ray& n, float f) {
+	return Ray{
+		n.origin, (n.direction + glm::normalize(randomWithinUnitSphere()))
+	};
+}
+Ray Material::reflect(const Ray& src, const Ray& n, float g) {
+	return Ray{
+		n.origin,
+		glm::reflect(src.direction, n.direction) + (g * randomWithinUnitSphere())
+	};
+}
+inline static float reflectance(float cos, float ir) {
+	return
+		pow( ((1.f - ir) / (1.f + ir)), 2)
+			+ (1.f - ir) * pow((1.f - cos), 5)
+	;
+}
+Ray Material::refract(const Ray& src, const Ray& n, float ir) {
+	float cos_theta = fmin(glm::dot(-src.direction, n.direction), 1.0);
+	float sin_theta = sqrt(1.f - cos_theta * cos_theta);
+	if (ir * sin_theta > 1.f || reflectance(cos_theta, ir) > Walnut::Random::Float()) {
+		return reflect(src, n);
+	}
+	glm::vec3 r_out_perp = ir * (src.direction + cos_theta * n.direction);
+	glm::vec3 r_out_para = -(float)sqrt(fabs(1.0 - glm::dot(r_out_perp, r_out_perp))) * n.direction;
+	glm::vec3 refr = r_out_perp + r_out_para;
+	return Ray{ n.origin, refr };
+}
+
 float Sphere::intersectionTime(const Ray& r) const {
 	glm::vec3 o = r.origin - this->position;
 	float

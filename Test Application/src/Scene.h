@@ -3,10 +3,12 @@
 #include <vector>
 #include <memory>
 #include <initializer_list>
+
 #include <glm/glm.hpp>
+#include <Walnut/Random.h>
 
 
-inline float sgn(float v) { return (int)(v > 0) - (int)(v < 0); }
+inline static float sgn(float v) { return (int)(v > 0) - (int)(v < 0); }
 inline static glm::vec3 center(std::initializer_list<glm::vec3> pts) {
 	glm::vec3 ret;
 	for (glm::vec3 pt : pts) {
@@ -14,6 +16,16 @@ inline static glm::vec3 center(std::initializer_list<glm::vec3> pts) {
 	}
 	return (ret /= pts.size());
 }
+inline static glm::vec3 randomWithinUnitSphere() {
+	for (;;) {
+		glm::vec3 v = Walnut::Random::Vec3(-1.f, 1.f);
+		if (glm::dot(v, v) < 1) {
+			return v;
+		}
+	}
+}
+
+
 
 struct Ray {
 	glm::vec3 origin;
@@ -22,15 +34,24 @@ struct Ray {
 
 
 struct Material {
+	inline Material(float r = 0, float g = 0, float t = 0, float l = 0) :
+		roughness(r), glossiness(g), transparency(t), luminance(l) {}
 	float
 		roughness{ 0.f },
-		metallic{ 0.f },
+		glossiness{ 0.f },
 		transparency{ 0.f },
+		refraction_index{ 1.5f },	// make sure to add this to constuctor
 		luminance{ 0.f };
+
+	virtual Ray scatter(const Ray& source, const Ray& normal) const;
+
+	static Ray diffuse(const Ray& normal, float factor = 1.f);
+	static Ray reflect(const Ray& source, const Ray& normal, float gloss = 0.f);
+	static Ray refract(const Ray& source, const Ray& normal, float refr_index = 1.5f);
 };
-static constexpr Material
+static const Material
 	_DEFAULT_MAT{ 0.2f, 0.f, 0.f, 0.f },
-	_LIGHT_SOURCE{ 0.f, 0.f, 0.f, 1.f };
+	_LIGHT_SOURCE{ 1.f, 0.f, 0.f, 1.f };
 
 struct Object {
 	Object(

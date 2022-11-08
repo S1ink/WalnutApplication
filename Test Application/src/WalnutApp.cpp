@@ -99,7 +99,8 @@ public:
 				ImGui::PushID(i);
 				if (ImGui::CollapsingHeader(("Mat " + std::to_string(i)).c_str())) {
 					ImGui::DragFloat("Roughness", &this->scene.materials[i].roughness, 0.005, 0.f, 1.f);
-					ImGui::DragFloat("Matallic", &this->scene.materials[i].metallic, 0.005, 0.f, 1.f);
+					ImGui::DragFloat("Glossiness", &this->scene.materials[i].glossiness, 0.005, 0.f, 1.f);
+					ImGui::DragFloat("Transparency", &this->scene.materials[i].transparency, 0.005, 0.f, 1.f);
 					ImGui::DragFloat("Luminance", &this->scene.materials[i].luminance, 0.005, 0.f, 1.f);
 				}
 				ImGui::PopID();

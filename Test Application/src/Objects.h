@@ -16,10 +16,10 @@ inline static const std::vector<Object*> objects{
 	new Triangle(
 		glm::vec3{100, -3, 100}, glm::vec3{100, -3, -100}, glm::vec3{-100, -3, -100}, glm::vec3{1}
 	)*/
-	/*new Quad(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 1, 0}, glm::vec3{1, 0, 0}),
+	new Quad(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 1, 0}, glm::vec3{1, 0, 0}),
 	new Quad(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{0, 1, 1}, glm::vec3{0, 0, 1}),
 	new Quad(glm::vec3{0, 0, 0}, glm::vec3{1, 0, 0}, glm::vec3{1, 0, 1}, glm::vec3{0, 0, 1}),
-	new Triangle(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),*/
+	//new Triangle(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),
 	new Sphere(glm::vec3{-1, -1, -1}, 0.5, glm::vec3{1.f},& _LIGHT_SOURCE),
 	new Sphere(glm::vec3{-4.f, 3.f, 2.f}, 1.f, glm::vec3{0.f, 1.f, 0.5f},& _LIGHT_SOURCE)
 	//new Triangle(glm::vec3{1, 1, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 0, 0}, glm::vec3{0, 1, 0}),

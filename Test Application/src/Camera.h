@@ -22,6 +22,7 @@ public:
 	const std::vector<glm::vec3>& GetRayDirections() const { return m_RayDirections; }
 
 	float GetRotationSpeed();
+	inline bool HasMoved() const { return this->last_hasmoved; }
 private:
 	void RecalculateProjection();
 	void RecalculateView();
@@ -43,6 +44,7 @@ private:
 	std::vector<glm::vec3> m_RayDirections;
 
 	glm::vec2 m_LastMousePosition{ 0.0f, 0.0f };
+	bool last_hasmoved{ false };
 
 	uint32_t m_ViewportWidth = 0, m_ViewportHeight = 0;
 };
