@@ -15,6 +15,15 @@ uint32_t vec2rgba(glm::vec4 c) {
 		(uint32_t)(c.g * 255.f) << 8 |
 		(uint32_t)(c.r * 255.f);
 }
+glm::vec4 rgba2vec(uint32_t* c) {
+	uint8_t* _c = reinterpret_cast<uint8_t*>(c);
+	return glm::vec4{
+		_c[0] / 255.f,
+		_c[1] / 255.f,
+		_c[2] / 255.f,
+		_c[3] / 255.f
+	};
+}
 
 void Renderer::resize(uint32_t w, uint32_t h) {
 	if (this->image) {
@@ -37,6 +46,7 @@ void Renderer::render(const Scene& scene, const Camera& cam) {
 	this->active_scene = &scene;
 	this->active_camera = &cam;
 
+	bool resample = this->enable_resampling;
 	uint32_t sz = this->image->GetWidth() * this->image->GetHeight();
 	for (uint32_t n = 0; n < sz; n++) {
 		glm::vec4 clr{0.f};
@@ -48,8 +58,14 @@ void Renderer::render(const Scene& scene, const Camera& cam) {
 			glm::sqrt(clr),
 			0.f, 1.f
 		);
-		this->buffer[n] = vec2rgba(clr);
+		if (resample) {
+			glm::vec4 base = rgba2vec(this->buffer + n);
+			this->buffer[n] = vec2rgba((base * (float)consecutive_frames + clr) /= (consecutive_frames + 1));
+		} else {
+			this->buffer[n] = vec2rgba(clr);
+		}
 	}
+	consecutive_frames++;
 
 }
 void Renderer::renderUnshaded(const Scene& scene, const Camera& cam) {
@@ -80,10 +96,12 @@ glm::vec4 Renderer::computeUnshaded(size_t n) {
 		this->active_camera->GetPosition(),
 		this->active_camera->GetRayDirections()[n]
 	};
-	RayResult result = this->traceRay(ray);
-	if (result.distance == -1) { return glm::vec4{ SKY_COLOR, 1.f }; }
-	if (result.is_source) { return glm::vec4{ this->active_scene->lights[result.objectid]->albedo, 1.f }; }
-	return glm::vec4{ this->active_scene->objects[result.objectid]->albedo, 1.f };
+	Interactable* o = nullptr;
+	Interaction i;
+	if (o = this->traceRay(ray, i)) {
+		return glm::vec4{ o->getAlbedo(), 1.f};
+	}
+	return glm::vec4{ SKY_COLOR, 1.f };
 }
 //glm::vec3 Renderer::evaluateRay(const Ray& r, size_t bounce, float a) {
 //	float amount = a;
@@ -196,60 +214,29 @@ glm::vec4 Renderer::computeUnshaded(size_t n) {
 //	clr += obj->albedo * obj->mat->luminance;
 //	return clr;
 //}
-glm::vec3 Renderer::evaluateRay(const Ray& r, size_t b, float a) {
-	if (b > MAX_BOUNCES) {
-		return glm::vec3{};
-	}
-	RayResult result = this->traceRay(r);
-	if (result.distance == -1) {
-		return SKY_COLOR;
-	}
-	Object* o = this->active_scene->objects[result.objectid];
-	if (o->mat->luminance >= 1.f) {
-		return o->albedo * o->mat->luminance;
-	}
-	return
-		0.5f * o->albedo * this->evaluateRay(o->mat->scatter(r, Ray{ result.w_position, result.w_normal }), b + 1)
-			+ o->albedo * o->mat->luminance/* * BRIGHTNESS_CONSTANT / (float)pow(result.distance, 2)*/
-	;
+glm::vec3 Renderer::evaluateRay(const Ray& r, size_t b) {
+	if (b > MAX_BOUNCES) { return glm::vec3{}; }
+	Interactable *o = nullptr;
+	Interaction i;
+	if (!(o = this->traceRay(r, i))) { return SKY_COLOR; }
+	if (o && o->getLuminance() >= 1.f) { return o->getAlbedo() * o->getLuminance(); }
+	Ray scatter;
+	o->calcInteraction(r, i, scatter);
+	return o->getAlbedo() * (o->getLuminance()/* * BRIGHTNESS_CONSTANT / (float)pow(i.ptime, 2)*/
+		+ 0.5f * this->evaluateRay(scatter, b + 1));
 }
-Renderer::RayResult Renderer::traceRay(const Ray& r) {
-	int32_t hit_idx = -1;
-	bool islight = false;
-	float q, t = std::numeric_limits<float>::max();
-	for (size_t i = 0; i < this->active_scene->objects.size(); i++) {
-		q = this->active_scene->objects[i]->intersectionTime(r);
-		if (q < t && q > 0) {
-			t = q;
-			hit_idx = (int32_t)i;
+Interactable* Renderer::traceRay(const Ray& r, Interaction& i) {
+	Interaction test;
+	Interactable* o = nullptr;
+	//o = nullptr;
+	i.ptime = std::numeric_limits<float>::max();
+	for (Interactable* it : this->active_scene->objects) {
+		if (it->calcIntersection(r, test) && test.ptime < i.ptime) {
+			o = it;
+			i = test;
 		}
 	}
-	for (size_t i = 0; i < this->active_scene->lights.size(); i++) {
-		q = this->active_scene->lights[i]->intersectionTime(r);
-		if (q < t && q > 0) {
-			t = q;
-			hit_idx = (uint32_t)i;
-			islight = true;
-		}
-	}
-	if (hit_idx == -1) { return this->traceMiss(r); }
-	return this->traceClosest(r, t, hit_idx, islight);
-}
-Renderer::RayResult Renderer::traceClosest(const Ray& r, float time, int32_t idx, bool light) {
-	RayResult result;
-	result.is_source = light;
-	result.distance = time;
-	result.objectid = idx;
-	result.w_position = r.origin + r.direction * time;
-	result.w_normal = light ?
-		this->active_scene->lights[idx]->calcNormal(result.w_position, r.direction) :
-		this->active_scene->objects[idx]->calcNormal(result.w_position, r.direction);
-	return result;
-}
-Renderer::RayResult Renderer::traceMiss(const Ray& r) {
-	RayResult ret;
-	ret.distance = -1;
-	return ret;
+	return o;
 }
 
 

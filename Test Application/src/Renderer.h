@@ -33,6 +33,8 @@ public:
 				this->multisample[i] = d / 2;
 			}
 		}*/
+		this->enable_resampling = !has_moved;
+		if (!this->enable_resampling) { this->consecutive_frames = 0; }
 		this->image->SetData(this->buffer);
 		return this->image;
 	}
@@ -45,20 +47,18 @@ public:
 protected:
 	//glm::vec4 traceRay(const Scene&, const Ray&);
 	
-	struct RayResult {
+	/*struct RayResult {
 		bool is_source{ false };
 		int32_t objectid{ -1 };
 		float distance{ -1 };
 		glm::vec3
 			w_position,
 			w_normal;
-	};
+	};*/
 	glm::vec4 computePixel(size_t);
 	glm::vec4 computeUnshaded(size_t);
-	glm::vec3 evaluateRay(const Ray&, size_t = 0U, float = 1.f);
-	RayResult traceRay(const Ray&);
-	RayResult traceClosest(const Ray&, float, int32_t, bool = false);
-	RayResult traceMiss(const Ray&);
+	glm::vec3 evaluateRay(const Ray&, size_t = 0U);
+	Interactable* traceRay(const Ray&, Interaction&);
 
 
 private:
@@ -76,6 +76,8 @@ private:
 	const Camera* active_camera{ nullptr };
 
 	uint32_t* buffer = nullptr;
+	mutable uint32_t consecutive_frames{ 0 };
+	mutable bool enable_resampling{true};
 	//uint32_t* multisample = nullptr;
 
 

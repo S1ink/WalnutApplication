@@ -18,23 +18,7 @@
 class RenderLayer : public Walnut::Layer
 {
 public:
-	RenderLayer() : scene{
-		{
-			objects
-		},
-		{
-			std::vector<int>((int)this->scene.objects.size(), -1)
-		},
-		{
-			{1}
-		},
-		{
-			//new Sphere(glm::vec3{-1, -1, -1}, 0.5, glm::vec3{ 1.f }, &_LIGHT_SOURCE),
-			//new Sphere(glm::vec3{-4.f, 3.f, 2.f}, 1.f, glm::vec3{0.f, 1.f, 0.5f}, &_LIGHT_SOURCE)/*,
-			//new Triangle(
-			//	glm::vec3{4, 5, 6}, glm::vec3{7, 4, 7}, glm::vec3{6, 5, 4}, glm::vec3{0.8, 0.5, 0})*/
-		}
-	} {}
+	RenderLayer() : scene(demo) {}
 
 
 	virtual void OnUpdate(float ts) override {
@@ -79,34 +63,31 @@ public:
 			if (ImGui::Button(this->unshaded ? "Enable RT" : "Disable RT")) {
 				this->unshaded = !this->unshaded;
 			}
+			ImGui::SameLine();
+			if (ImGui::Button(this->e_resample ? "Disable Resampling" : "Enable Resampling")) {
+				this->e_resample = !this->e_resample;
+			}
 			ImGui::Separator();
 			ImGui::ColorEdit3("Sky Color", glm::value_ptr(Renderer::SKY_COLOR));
 			if (ImGui::DragInt("Bounce Limit", &Renderer::MAX_BOUNCES, 1.f, 1, 100) && Renderer::MAX_BOUNCES < 1) { Renderer::MAX_BOUNCES = 1; }
 			if (ImGui::DragInt("Samples", &Renderer::SAMPLE_RAYS, 1.f, 1, 100) && Renderer::SAMPLE_RAYS < 1) { Renderer::SAMPLE_RAYS = 1; }
 			ImGui::Separator();
-			for (size_t i = 0; i < this->scene.objects.size(); i++) {
+			size_t i = 0;
+			for (Interactable* obj : this->scene.objects) {
 				ImGui::PushID(i);
 				if (ImGui::CollapsingHeader(("Obj " + std::to_string(i)).c_str())) {
-					this->scene.objects[i]->invokeOptions();
-					if (ImGui::DragInt("Material ID", &this->scene.obj_mats[i], 1.f, -1, (int)this->scene.materials.size() - 1) && this->scene.obj_mats[i] < this->scene.materials.size()) {
+					obj->invokeGuiOptions();
+					/*if (ImGui::DragInt("Material ID", &this->scene.obj_mats[i], 1.f, -1, (int)this->scene.materials.size() - 1) && this->scene.obj_mats[i] < this->scene.materials.size()) {
 						this->scene.objects[i]->mat = (this->scene.obj_mats[i] < 0 ? &_DEFAULT_MAT : &this->scene.materials[this->scene.obj_mats[i]]);
-					}
+					}*/
 				}
 				ImGui::PopID();
+				i++;
 			}
-			ImGui::Separator;
-			for (size_t i = 0; i < this->scene.materials.size(); i++) {
-				ImGui::PushID(i);
-				if (ImGui::CollapsingHeader(("Mat " + std::to_string(i)).c_str())) {
-					ImGui::DragFloat("Roughness", &this->scene.materials[i].roughness, 0.005, 0.f, 1.f);
-					ImGui::DragFloat("Glossiness", &this->scene.materials[i].glossiness, 0.005, 0.f, 1.f);
-					ImGui::DragFloat("Transparency", &this->scene.materials[i].transparency, 0.005, 0.f, 1.f);
-					ImGui::DragFloat("Luminance", &this->scene.materials[i].luminance, 0.005, 0.f, 1.f);
-				}
-				ImGui::PopID();
-			}
-			if (ImGui::Button("Add Material")) { this->scene.materials.emplace_back(); }
 
+		} ImGui::End();
+		ImGui::Begin("Materials"); {
+			Material::invokeManagerGui();
 		} ImGui::End();
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
@@ -137,7 +118,7 @@ protected:
 				this->renderer.render(this->scene, this->camera);
 			}
 		}
-		return this->renderer.getOutput();
+		return this->renderer.getOutput(this->camera.HasMoved() || !this->e_resample);
 	}
 
 private:
@@ -151,7 +132,7 @@ private:
 
 	float ltime = 0.f;
 	float lscroll = ImGui::GetIO().MouseWheel;
-	bool paused{ false }, desync_render{ false }, unshaded{ false };
+	bool paused{ false }, desync_render{ false }, unshaded{ false }, e_resample{ false };
 
 
 };
