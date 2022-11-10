@@ -96,11 +96,11 @@ glm::vec4 Renderer::computeUnshaded(size_t n) {
 		this->active_camera->GetPosition(),
 		this->active_camera->GetRayDirections()[n]
 	};
-	Interactable* o = nullptr;
-	Interaction i;
+	/*Interactable* o = nullptr;
+	Hit i;
 	if (o = this->traceRay(ray, i)) {
 		return glm::vec4{ o->getAlbedo(), 1.f};
-	}
+	}*/
 	return glm::vec4{ SKY_COLOR, 1.f };
 }
 //glm::vec3 Renderer::evaluateRay(const Ray& r, size_t bounce, float a) {
@@ -216,28 +216,30 @@ glm::vec4 Renderer::computeUnshaded(size_t n) {
 //}
 glm::vec3 Renderer::evaluateRay(const Ray& r, size_t b) {
 	if (b > MAX_BOUNCES) { return glm::vec3{}; }
-	Interactable *o = nullptr;
-	Interaction i;
-	if (!(o = this->traceRay(r, i))) { return SKY_COLOR; }
-	if (o && o->getLuminance() >= 1.f) { return o->getAlbedo() * o->getLuminance(); }
-	Ray scatter;
-	o->calcInteraction(r, i, scatter);
-	return o->getAlbedo() * (o->getLuminance()/* * BRIGHTNESS_CONSTANT / (float)pow(i.ptime, 2)*/
-		+ 0.5f * this->evaluateRay(scatter, b + 1));
-}
-Interactable* Renderer::traceRay(const Ray& r, Interaction& i) {
-	Interaction test;
-	Interactable* o = nullptr;
-	//o = nullptr;
-	i.ptime = std::numeric_limits<float>::max();
-	for (Interactable* it : this->active_scene->objects) {
-		if (it->calcIntersection(r, test) && test.ptime < i.ptime) {
-			o = it;
-			i = test;
+	Hit hit;
+	if (this->active_scene->interacts(r, hit)) {
+		Ray redirect;
+		if (hit.surface && hit.surface->redirect(r, hit, redirect)) {
+			return glm::vec3{1.f} * (0.5f * this->evaluateRay(redirect, b + 1) + hit.surface->gamma());
 		}
 	}
-	return o;
+	return this->active_scene->skyColor(r);
+	//return o->getAlbedo() * (o->getLuminance()/* * BRIGHTNESS_CONSTANT / (float)pow(i.ptime, 2)*/
+	//	+ /*0.5f * */this->evaluateRay(scatter, b + 1));
 }
+//Interactable* Renderer::traceRay(const Ray& r, Hit& i) {
+//	Hit test;
+//	Interactable* o = nullptr;
+//	//o = nullptr;
+//	i.ptime = std::numeric_limits<float>::max();
+//	for (Interactable* it : this->active_scene->objects) {
+//		if (it->interacts(r, test) && test.ptime < i.ptime) {
+//			o = it;
+//			i = test;
+//		}
+//	}
+//	return o;
+//}
 
 
 //glm::vec4 Renderer::traceRay(const Scene& scene, const Ray& ray) {

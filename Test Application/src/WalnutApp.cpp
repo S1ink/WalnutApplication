@@ -68,27 +68,26 @@ public:
 				this->e_resample = !this->e_resample;
 			}
 			ImGui::Separator();
-			ImGui::ColorEdit3("Sky Color", glm::value_ptr(Renderer::SKY_COLOR));
+			ImGui::ColorEdit3("Sky Color", glm::value_ptr(this->scene.sky_color));
 			if (ImGui::DragInt("Bounce Limit", &Renderer::MAX_BOUNCES, 1.f, 1, 100) && Renderer::MAX_BOUNCES < 1) { Renderer::MAX_BOUNCES = 1; }
 			if (ImGui::DragInt("Samples", &Renderer::SAMPLE_RAYS, 1.f, 1, 100) && Renderer::SAMPLE_RAYS < 1) { Renderer::SAMPLE_RAYS = 1; }
 			ImGui::Separator();
-			size_t i = 0;
-			for (Interactable* obj : this->scene.objects) {
-				ImGui::PushID(i);
-				if (ImGui::CollapsingHeader(("Obj " + std::to_string(i)).c_str())) {
-					obj->invokeGuiOptions();
-					/*if (ImGui::DragInt("Material ID", &this->scene.obj_mats[i], 1.f, -1, (int)this->scene.materials.size() - 1) && this->scene.obj_mats[i] < this->scene.materials.size()) {
-						this->scene.objects[i]->mat = (this->scene.obj_mats[i] < 0 ? &_DEFAULT_MAT : &this->scene.materials[this->scene.obj_mats[i]]);
-					}*/
-				}
-				ImGui::PopID();
-				i++;
+			this->scene.invokeGuiOptions();
+			ImGui::PushID("default_mat");
+			if (ImGui::CollapsingHeader("Default Material")) {
+				PhysicalBase::DEFAULT->invokeGuiOptions();
 			}
+			ImGui::PopID();
+			ImGui::PushID("light_mat");
+			if (ImGui::CollapsingHeader("Light Source Material")) {
+				PhysicalBase::LIGHT->invokeGuiOptions();
+			}
+			ImGui::PopID();
 
 		} ImGui::End();
-		ImGui::Begin("Materials"); {
+		/*ImGui::Begin("Materials"); {
 			Material::invokeManagerGui();
-		} ImGui::End();
+		} ImGui::End();*/
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 		ImGui::Begin("Render"); {
@@ -131,7 +130,6 @@ private:
 	std::shared_ptr<Walnut::Image> frame;
 
 	float ltime = 0.f;
-	float lscroll = ImGui::GetIO().MouseWheel;
 	bool paused{ false }, desync_render{ false }, unshaded{ false }, e_resample{ false };
 
 

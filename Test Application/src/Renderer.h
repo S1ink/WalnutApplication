@@ -10,10 +10,6 @@
 #include "Scene.h"
 
 
-//struct Sphere : glm::vec4 {
-//	inline float radius() const { return this->w; }
-//	inline glm::vec3 position() const { return glm::vec3(*this); }
-//};
 
 class Renderer {
 public:
@@ -58,7 +54,7 @@ protected:
 	glm::vec4 computePixel(size_t);
 	glm::vec4 computeUnshaded(size_t);
 	glm::vec3 evaluateRay(const Ray&, size_t = 0U);
-	Interactable* traceRay(const Ray&, Interaction&);
+	//Interactable* traceRay(const Ray&, Hit&);
 
 
 private:
