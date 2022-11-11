@@ -8,7 +8,7 @@ class Camera
 public:
 	Camera(float verticalFOV, float nearClip, float farClip);
 
-	void OnUpdate(float ts);
+	bool OnUpdate(float ts);
 	void OnResize(uint32_t width, uint32_t height);
 
 	inline const glm::mat4& GetProjection() const { return m_Projection; }
@@ -21,9 +21,9 @@ public:
 
 	inline const std::vector<glm::vec3>& GetRayDirections() const { return m_RayDirections; }
 
-	inline bool HasMoved() const { return this->m_HasMoved; }
-
 	float GetRotationSpeed();
+
+	void CalculateRandomDirections(std::vector<glm::vec3>&) const;
 
 private:
 	void RecalculateProjection();
@@ -46,7 +46,6 @@ private:
 	std::vector<glm::vec3> m_RayDirections;
 
 	glm::vec2 m_LastMousePosition{ 0.0f, 0.0f };
-	bool m_HasMoved{ false };
 
 	uint32_t m_ViewportWidth = 0, m_ViewportHeight = 0;
 };

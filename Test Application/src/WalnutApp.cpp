@@ -22,7 +22,10 @@ public:
 
 
 	virtual void OnUpdate(float ts) override {
-		this->camera.OnUpdate(ts);
+		if (this->camera.OnUpdate(ts)) {
+			this->renderer.resetAccumulatedFrames();
+			//this->renderer.updateRandomRays(this->camera);
+		}
 	}
 	virtual void OnUIRender() override {
 
@@ -63,9 +66,10 @@ public:
 			if (ImGui::Button(this->unshaded ? "Enable RT" : "Disable RT")) {
 				this->unshaded = !this->unshaded;
 			}
+			ImGui::Checkbox("Accumulate Samples", &this->renderer.accumulate);
 			ImGui::SameLine();
-			if (ImGui::Button(this->e_resample ? "Disable Resampling" : "Enable Resampling")) {
-				this->e_resample = !this->e_resample;
+			if (ImGui::Button("Reset Accumulation")) {
+				this->renderer.resetAccumulatedFrames();
 			}
 			ImGui::Separator();
 			ImGui::ColorEdit3("Sky Color", glm::value_ptr(this->scene.sky_color));
@@ -109,15 +113,17 @@ public:
 protected:
 	std::shared_ptr<Walnut::Image> render() {
 		if (!this->desync_render) {
-			this->renderer.resize(this->frame_width, this->frame_height);
-			this->camera.OnResize(this->frame_width, this->frame_height);
+			if (this->renderer.resize(this->frame_width, this->frame_height)) {
+				this->camera.OnResize(this->frame_width, this->frame_height);
+				//this->renderer.updateRandomRays(this->camera);
+			}
 			if (this->unshaded) {
 				this->renderer.renderUnshaded(this->scene, this->camera);
 			} else {
 				this->renderer.render(this->scene, this->camera);
 			}
 		}
-		return this->renderer.getOutput(this->camera.HasMoved() || !this->e_resample);
+		return this->renderer.getOutput();
 	}
 
 private:
@@ -130,7 +136,7 @@ private:
 	std::shared_ptr<Walnut::Image> frame;
 
 	float ltime = 0.f;
-	bool paused{ false }, desync_render{ false }, unshaded{ false }, e_resample{ false };
+	bool paused{ false }, desync_render{ false }, unshaded{ false };
 
 
 };

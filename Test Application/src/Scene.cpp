@@ -67,13 +67,13 @@ bool PhysicalBase::redirect(const Ray& src, const Hit& hit, Ray& out) const {
 }
 bool PhysicalBase::diffuse(const Ray& n, Ray& out) {
 	out.origin = n.origin;
-	out.direction = n.direction + glm::normalize(randomWithinUnitSphere());
+	out.direction = n.direction + Walnut::Random::InUnitSphere();
 	if (fabs(out.direction.x) < 1e-5f && fabs(out.direction.y) < 1e-5f && fabs(out.direction.z) < 1e-5f) { out.direction = n.direction; }
 	return true;
 }
 bool PhysicalBase::reflect(const Ray& src, const Hit& hit, Ray& out, float g) {
 	out.origin = hit.normal.origin;
-	out.direction = glm::reflect(src.direction, hit.normal.direction) + (g * randomWithinUnitSphere());
+	out.direction = glm::reflect(src.direction, hit.normal.direction) + (g * Walnut::Random::InUnitSphere());
 	return glm::dot(out.direction, hit.normal.direction) > 0;
 }
 inline static float reflectance(float cos, float ir) {

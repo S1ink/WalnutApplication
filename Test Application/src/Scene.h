@@ -16,14 +16,14 @@ inline static glm::vec3 center(std::initializer_list<glm::vec3> pts) {
 	}
 	return (ret /= pts.size());
 }
-inline static glm::vec3 randomWithinUnitSphere() {
-	for (;;) {
-		glm::vec3 v = Walnut::Random::Vec3(-1.f, 1.f);
-		if (glm::dot(v, v) < 1) {
-			return v;
-		}
-	}
-}
+//inline static glm::vec3 randomWithinUnitSphere() {	// use Walnut::Random::InUnitSphere()
+//	for (;;) {
+//		glm::vec3 v = Walnut::Random::Vec3(-1.f, 1.f);
+//		if (glm::dot(v, v) < 1) {
+//			return v;
+//		}
+//	}
+//}
 
 class Material;
 
