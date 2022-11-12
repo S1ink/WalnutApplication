@@ -64,17 +64,14 @@ void Renderer::render(const Scene& scene, const Camera& cam) {
 			clr += this->computePixel(n);
 		}
 		clr /= SAMPLE_RAYS;
-		clr = glm::clamp(
-			glm::sqrt(clr),
-			0.f, 1.f
-		);
+		clr = glm::clamp(clr, 0.f, 1.f);
 		if (this->accumulated_frames == 1) {
 			this->accumulated_samples[n] = clr;
 		} else {
 			clr = (this->accumulated_samples[n] += clr);
 			clr /= this->accumulated_frames;
 		}
-		this->buffer[n] = vec2rgba(clr);
+		this->buffer[n] = vec2rgba(glm::sqrt(clr));
 	}
 	if (this->accumulate) {
 		this->accumulated_frames++;
