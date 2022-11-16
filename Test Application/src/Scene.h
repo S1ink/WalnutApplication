@@ -26,6 +26,7 @@ inline static glm::vec3 center(std::initializer_list<glm::vec3> pts) {
 //}
 
 class Material;
+class Texture;
 
 struct Ray {
 	glm::vec3 origin{0.f};
@@ -35,7 +36,8 @@ struct Hit {
 	bool reverse_intersect{false};	// the normal is on the "inside" of the surface
 	float ptime{0.f};		// time along source ray
 	Ray normal{};			// normal with origin at the hit point
-	const Material* surface{nullptr};	// the surface that was hit
+	const Material* surface{ nullptr };	// the surface that was hit
+	const Texture* texture{ nullptr };
 };
 
 
@@ -45,6 +47,7 @@ public:
 		const Ray& source, Hit& hit,
 		float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()
 	) const = 0;
+
 	inline virtual void invokeGuiOptions() {}
 };
 class Material {
@@ -53,10 +56,11 @@ public:
 	virtual float gamma() const { return 0.f; }
 	inline virtual void invokeGuiOptions() {}
 };
-//class Texture {
-//public:
-//
-//};
+class Texture {
+public:
+	virtual glm::vec3 albedo(glm::vec2 uv) = 0;
+	inline virtual void invokeGuiOptions() {}
+};
 
 
 
@@ -83,6 +87,16 @@ public:
 	static bool diffuse(const Ray& normal, Ray& redirect);
 	static bool reflect(const Ray& source, const Hit& hit, Ray& redirect, float gloss = 0.f);
 	static bool refract(const Ray& source, const Hit& hit, float refr_index, Ray& redirect, float gloss = 0.f);
+
+};
+class StaticColor : public Texture {
+public:
+	inline StaticColor(glm::vec3 albedo = glm::vec3{0.f}) : color(albedo) {}
+
+	glm::vec3 color;
+
+	inline virtual glm::vec3 albedo(glm::vec2) override { return this->color; }
+	virtual void invokeGuiOptions() override;
 
 };
 
@@ -217,5 +231,22 @@ public:
 
 private:
 	std::vector<std::shared_ptr<Interactable>> objects;
+
+};
+
+class MaterialManager {
+public:
+	MaterialManager() = default;
+
+	template<typename Mat_t>
+	void add(size_t);
+	template<typename Mat_t>
+	void addExisting(std::unique_ptr<Mat_t>&&);
+
+	void invokeGui();
+
+
+private:
+	std::vector<std::unique_ptr<Material>> materials;
 
 };

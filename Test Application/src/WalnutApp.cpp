@@ -77,6 +77,10 @@ public:
 			if (ImGui::DragInt("Samples", &Renderer::SAMPLE_RAYS, 1.f, 1, 100) && Renderer::SAMPLE_RAYS < 1) { Renderer::SAMPLE_RAYS = 1; }
 			ImGui::Separator();
 			this->scene.invokeGuiOptions();
+			
+
+		} ImGui::End();
+		ImGui::Begin("Materials"); {
 			ImGui::PushID("default_mat");
 			if (ImGui::CollapsingHeader("Default Material")) {
 				PhysicalBase::DEFAULT->invokeGuiOptions();
@@ -87,11 +91,8 @@ public:
 				PhysicalBase::LIGHT->invokeGuiOptions();
 			}
 			ImGui::PopID();
-
+			this->mats.invokeGui();
 		} ImGui::End();
-		/*ImGui::Begin("Materials"); {
-			Material::invokeManagerGui();
-		} ImGui::End();*/
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 		ImGui::Begin("Render"); {
@@ -130,6 +131,7 @@ private:
 	Renderer renderer;
 	Camera camera{60.f, 0.1f, 100.f};
 	Scene scene;
+	MaterialManager mats;
 	uint32_t frame_width = 0, frame_height = 0;
 	std::thread rendt;
 	
@@ -149,6 +151,7 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 	spec.Height = 720;
 
 	Walnut::Application* app = new Walnut::Application(spec);
+	static bool demo{ false };
 	app->PushLayer<RenderLayer>();
 	app->SetMenubarCallback([app]()
 	{
@@ -158,7 +161,11 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 			{
 				app->Close();
 			}
+			ImGui::MenuItem("Demo", NULL, &demo);
 			ImGui::EndMenu();
+		}
+		if (demo) {
+			ImGui::ShowDemoWindow(&demo);
 		}
 	});
 	return app;

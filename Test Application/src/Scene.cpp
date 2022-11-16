@@ -96,6 +96,10 @@ bool PhysicalBase::refract(const Ray& src, const Hit& hit, float ir, Ray& out, f
 	return true;
 }
 
+void StaticColor::invokeGuiOptions() {
+	ImGui::ColorEdit3("Albedo", glm::value_ptr(this->color));
+}
+
 
 bool Sphere::interacts(const Ray& r, Hit& h, float t_min, float t_max) const {
 	glm::vec3 o = r.origin - this->position;
@@ -162,6 +166,17 @@ void Sphere::invokeGuiOptions() {
 	ImGui::DragFloat3("Position", glm::value_ptr(this->position), 0.05);
 	ImGui::DragFloat("Radius", &this->rad, 0.05);
 	ImGui::ColorEdit3("Albedo", glm::value_ptr(this->albedo));
+	ImGui::Button("Aquire Material");
+	if (ImGui::BeginDragDropTarget()) {
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("MATERIAL_PTR")) {
+			if (payload->DataSize == sizeof(Material)) {
+				//std::cout << (int)payload->Data << std::endl;
+				//std::cout << (payload->Data == nullptr) << std::endl;
+				this->mat = /*reinterpret_cast<Material*>*/(Material*)(payload->Data);
+			}
+		}
+		ImGui::EndDragDropTarget();
+	}
 	/*int v = this->mat->idx();
 	if (ImGui::DragInt("Material ID", &v, 1.f, 0, Material::numMats() - 1, "%d", ImGuiSliderFlags_AlwaysClamp)) {
 		this->mat = Material::getMat(v);
@@ -211,5 +226,27 @@ void Scene::invokeGuiOptions() {
 		}
 		ImGui::PopID();
 		i++;
+	}
+}
+
+void MaterialManager::invokeGui() {
+	size_t i = 0;
+	for (std::unique_ptr<Material>& mat : this->materials) {
+		ImGui::PushID(i);
+		if (ImGui::CollapsingHeader(("Mat" + std::to_string(i)).c_str())) {
+			mat->invokeGuiOptions();
+			ImGui::Button("Apply to Object!");
+			if (ImGui::BeginDragDropSource()) {
+				ImGui::SetDragDropPayload("MATERIAL_PTR", mat.get(), sizeof(Material));
+				ImGui::Text("Drag to Object to Apply");
+				ImGui::EndDragDropSource();
+			}
+		}
+		// deleter option
+		ImGui::PopID();
+		i++;
+	}
+	if (ImGui::Button("Add PhysicalBase")) {
+		this->materials.emplace_back(std::make_unique<PhysicalBase>());
 	}
 }
