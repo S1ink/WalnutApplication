@@ -5,6 +5,7 @@
 #include <initializer_list>
 
 #include <glm/glm.hpp>
+#include <stb_image.h>
 #include <Walnut/Random.h>
 
 
@@ -16,17 +17,16 @@ inline static glm::vec3 center(std::initializer_list<glm::vec3> pts) {
 	}
 	return (ret /= pts.size());
 }
-//inline static glm::vec3 randomWithinUnitSphere() {	// use Walnut::Random::InUnitSphere()
-//	for (;;) {
-//		glm::vec3 v = Walnut::Random::Vec3(-1.f, 1.f);
-//		if (glm::dot(v, v) < 1) {
-//			return v;
-//		}
-//	}
-//}
+inline static glm::vec3 center(glm::vec3 a, glm::vec3 b, glm::vec3 c) {
+	return (a += b += c) /= 3.f;
+}
+inline static glm::vec3 center(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d) {
+	return (a += b += c += d) /= 4.f;
+}
+template<typename t>
+inline static t clamp(t n, t h, t l)
+	{ return n >= h ? h : n <= l ? l : n; }
 
-//class Material;
-//class Texture;
 
 struct Ray {
 	glm::vec3 origin{0.f};
@@ -36,8 +36,6 @@ struct Hit {
 	bool reverse_intersect{false};	// the normal is on the "inside" of the surface
 	float ptime{0.f};		// time along source ray
 	Ray normal{};			// normal with origin at the hit point
-	//const Material* surface{ nullptr };	// the surface that was hit
-	//const Texture* texture{ nullptr };
 	glm::vec2 uv{ -1.f };
 };
 
@@ -107,61 +105,26 @@ public:
 	virtual void invokeGuiOptions() override;
 
 };
+class ImageTexture : public Texture {
+public:
+	inline ImageTexture() :
+		ImageTexture(nullptr, 0U, 0U) {}
+	inline ImageTexture(uint8_t* d, uint32_t w, uint32_t h, uint8_t pb = 3U) :
+		data(d), width(w), height(h), pixel_bytes(pb) {}
+	inline ImageTexture(const char* f) :
+		data(stbi_load(f, (int*)&this->height, (int*)&this->width, (int*)&this->pixel_bytes, this->pixel_bytes)), pixel_bytes(3U)
+		{ if (!data) { this->height = this->width = 0U; } }
+	inline ~ImageTexture()
+		{ if(this->data) { free(this->data); } }
 
-//class Material {
-//public:
-//	Material(float r = 1.f, float g = 0.f, float t = 0.f, float l = 0.f, float ir = 1.f);
-//	Material(const Material&);
-//	virtual ~Material();
-//		
-//	float
-//		roughness, glossiness,
-//		transparency, refraction_index,
-//		luminance;
-//
-//	static const Material
-//		_DEFAULT, _LIGHT;
-//
-//	inline size_t idx() const { return this->index; }
-//	virtual Ray scatter(const Ray& source, const Hit& hit) const;
-//	virtual void invokeGui();
-//
-//	static Ray diffuse(const Ray& normal, float factor = 1.f);
-//	static Ray reflect(const Ray& source, const Hit& hit, float gloss = 0.f);
-//	static Ray refract(const Ray& source, const Hit& hit, float refr_index = 1.5f, float gloss = 0.f);
-//	
-//	static void invokeManagerGui();
-//	inline static Material* getMat(size_t i) { return materials.at(i); }
-//	inline static size_t numMats() { return materials.size(); }
-//
-//private:
-//	inline static std::vector<Material*> materials;
-//	size_t index{(size_t)-1};
-//
-//};
+	virtual glm::vec3 albedo(glm::vec2) const override;
+	virtual void invokeGuiOptions() override;
 
+	uint8_t* data, pixel_bytes{ 3U };
+	uint32_t width, height;
 
+};
 
-
-//struct Object {
-//	Object(
-//		glm::vec3 p = glm::vec3{ 0.f },
-//		glm::vec3 c = glm::vec3{ 1.f },
-//		const Material* m = &_MAT_DEFAULT
-//	) : position(p), albedo(c), mat(m) {}
-//	~Object() = default;
-//
-//	glm::vec3 position{ 0.f }, albedo{ 1.f };
-//	const Material* mat;
-//
-//	inline virtual glm::vec3 getColor(glm::vec3) const { return this->albedo; }
-//	inline virtual void moveTo(glm::vec3 p) { this->position = p; }
-//	inline virtual void invokeOptions() {}
-//
-//	virtual float intersectionTime(const Ray&) const = 0;		// return time of intersection or 0 if none exists
-//	virtual glm::vec3 calcNormal(glm::vec3 hit, glm::vec3 raydir) const = 0;	// return normal vector at point of intersection
-//
-//};
 
 
 class Sphere : public Interactable {
@@ -195,13 +158,13 @@ public:
 };
 class Triangle : public Interactable {
 public:
-	Triangle(
+	inline Triangle(
 		glm::vec3 p1, glm::vec3 p2, glm::vec3 p3,
 		Material* m = PhysicalBase::DEFAULT.get(),
 		Texture* t = StaticColor::DEFAULT.get(),
 		float l = 0.f
 	) :
-		position(center({ p1, p2, p3 })), p1(p1), p2(p2), p3(p3),
+		position(center(p1, p2, p3)), p1(p1), p2(p2), p3(p3),
 		e1(p2 - p1), e2(p3 - p1), norm(glm::normalize(glm::cross(this->e1, this->e2))),
 		luminance(l), mat(m), tex(t)
 	{}
@@ -227,14 +190,16 @@ public:
 };
 class Quad : public Interactable {
 public:
-	Quad(
+	inline Quad(
 		glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 p4,
 		Material* m = PhysicalBase::DEFAULT.get(),
 		Texture* t = StaticColor::DEFAULT.get(),
 		float l = 0.f
 	) :
 		h1(p1, p2, p4, m, t, l), h2(p3, p2, p4, m, t, l)
-	{}
+	{
+		h1.position = center(p1, p2, p3, p4);
+	}
 
 	Triangle h1, h2;
 
@@ -282,7 +247,6 @@ public:
 	void addExisting(std::unique_ptr<Mat_t>&&);*/
 
 	void invokeGui();
-
 
 private:
 	std::vector<std::unique_ptr<Material>> materials;

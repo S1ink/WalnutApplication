@@ -1,5 +1,7 @@
 #include "Scene.h"
 
+#include "Util.h"
+
 #include <string>
 #include <iostream>
 
@@ -101,6 +103,42 @@ void StaticColor::invokeGuiOptions() {
 	ImGui::ColorEdit3("Albedo", glm::value_ptr(this->color));
 }
 
+glm::vec3 ImageTexture::albedo(glm::vec2 uv) const {
+	if (!this->data || this->width < 1 || this->height < 1) { return glm::vec3{ 0.5f }; }
+	uv.x = clamp(uv.x, 1.f, 0.f);
+	uv.y = 1.f - clamp(uv.y, 1.f, 0.f);
+	uint32_t
+		x = (uint32_t)(uv.x * (float)(this->width - 1)),
+		y = (uint32_t)(uv.y * (float)(this->height - 1));
+	uint8_t* pix = this->data + ((y * this->width + x) * this->pixel_bytes);
+	return glm::vec3{
+		pix[0] / 255.f,
+		pix[1] / 255.f,
+		pix[2] / 255.f
+	};
+}
+void ImageTexture::invokeGuiOptions() {
+	if (ImGui::Button("Load Texture Image")) {
+		std::string f;
+		if (openFile(f)) {		// explorer dialogue
+			int x, y, pb;
+			if (uint8_t* d = stbi_load(f.c_str(), &x, &y, &pb, this->pixel_bytes)) {
+				if (this->data) { free(this->data); }
+				this->data = d;
+				this->width = x;
+				this->height = y;
+				this->pixel_bytes = 3;
+				/*std::cout << "Successfully loaded " << f << "\nWidth: " << x << "\nHeight: " << y << "\nPixel Bytes: " << pb
+					<< "\nTest: ["
+					<< (int)(d[(x) * (y) * 3 - 3]) << ", "
+					<< (int)(d[(x) * (y) * 3 - 2]) << ", "
+					<< (int)(d[(x) * (y) * 3 - 1])
+					<< "]" << std::endl;*/
+			}
+		}
+	}
+}
+
 
 const Interactable* Sphere::interacts(const Ray& r, Hit& h, float t_min, float t_max) const {
 	glm::vec3 o = r.origin - this->position;
@@ -127,8 +165,8 @@ glm::vec3 Sphere::albedo(Hit& hit) const {
 	}
 	if (hit.uv == glm::vec2{ -1.f }) {
 		hit.uv = glm::vec2{
-			(atan2(-hit.normal.direction.z, hit.normal.direction.x) + glm::pi<float>()) / glm::two_pi<float>(),
-			acos(-hit.normal.direction.y) / glm::pi<float>()
+			(atan2f(-hit.normal.direction.z, hit.normal.direction.x) + glm::pi<float>()) / glm::two_pi<float>(),
+			acosf(-hit.normal.direction.y) / glm::pi<float>()
 		};
 	}
 	return this->tex->albedo(hit.uv);
@@ -183,13 +221,13 @@ glm::vec3 Quad::albedo(Hit& hit) const {
 }
 
 void Triangle::move(glm::vec3 p) {
-	p = p - center({ this->p1, this->p2, this->p3 });
+	p = p - center(this->p1, this->p2, this->p3);
 	this->p1 += p;
 	this->p2 += p;
 	this->p3 += p;
 }
 void Quad::move(glm::vec3 p) {
-	p = p - center({ this->h1.p1, this->h1.p2, this->h2.p1, this->h1.p3 });
+	p = p - center(this->h1.p1, this->h1.p2, this->h2.p1, this->h1.p3);
 	this->h1.p1 += p;
 	this->h2.p1 += p;
 	this->h1.p2 += p;
@@ -215,6 +253,9 @@ void Sphere::invokeGuiOptions() {
 	ImGui::DragFloat3("Position", glm::value_ptr(this->position), 0.05);
 	ImGui::DragFloat("Radius", &this->radius, 0.05);
 	ImGui::DragFloat("Luminance", &this->luminance, 0.05, 0, 100);
+	if (ImGui::Button("Reset Mat")) { this->mat = PhysicalBase::DEFAULT.get(); }
+	ImGui::SameLine();
+	if (ImGui::Button("Reset Texture")) { this->tex = StaticColor::DEFAULT.get(); }
 	if (this->mat && ImGui::TreeNode("Material Editor")) {
 		this->mat->invokeGuiOptions();
 		ImGui::TreePop();
@@ -245,6 +286,9 @@ void Triangle::invokeGuiOptions() {
 		this->move(this->position);
 	}
 	ImGui::DragFloat("Luminance", &this->luminance, 0.05, 0, 100);
+	if (ImGui::Button("Reset Mat")) { this->mat = PhysicalBase::DEFAULT.get(); }
+	ImGui::SameLine();
+	if (ImGui::Button("Reset Texture")) { this->tex = StaticColor::DEFAULT.get(); }
 	if (this->mat && ImGui::TreeNode("Material Editor")) {
 		this->mat->invokeGuiOptions();
 		ImGui::TreePop();
@@ -276,6 +320,9 @@ void Quad::invokeGuiOptions() {
 	if (ImGui::DragFloat("Luminance", &this->h1.luminance, 0.05, 0, 100)) {
 		this->h2.luminance = this->h1.luminance;
 	}
+	if (ImGui::Button("Reset Mat")) { this->h1.mat = this->h2.mat = PhysicalBase::DEFAULT.get(); }
+	ImGui::SameLine();
+	if (ImGui::Button("Reset Texture")) { this->h1.tex = this->h2.tex = StaticColor::DEFAULT.get(); }
 	if (this->h1.mat && ImGui::TreeNode("Material Editor")) {
 		this->h1.mat->invokeGuiOptions();
 		ImGui::TreePop();
@@ -312,6 +359,19 @@ void Scene::invokeGuiOptions() {
 		}
 		ImGui::PopID();
 		i++;
+	}
+	if (ImGui::Button("Add Sphere")) {
+		this->objects.emplace_back(std::make_shared<Sphere>());
+	} ImGui::SameLine();
+	if (ImGui::Button("Add Triangle")) {
+		this->objects.emplace_back(std::make_shared<Triangle>(
+			glm::vec3{ 0, 0, 0 }, glm::vec3{ 0, 1, 0 }, glm::vec3{ 1, 1, 0 }
+		));
+	} ImGui::SameLine();
+	if (ImGui::Button("Add Quad")) {
+		this->objects.emplace_back(std::make_shared<Quad>(
+			glm::vec3{ 0, 0, 0 }, glm::vec3{ 0, 1, 0 }, glm::vec3{ 1, 1, 0 }, glm::vec3{ 1, 0, 0 }
+		));
 	}
 }
 
@@ -370,5 +430,9 @@ void TextureManager::invokeGui() {
 	}
 	if (ImGui::Button("Add Staticly Colored Texture")) {
 		this->textures.emplace_back(std::make_unique<StaticColor>());
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Add Image Texture")) {
+		this->textures.emplace_back(std::make_unique<ImageTexture>());
 	}
 }

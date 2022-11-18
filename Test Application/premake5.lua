@@ -12,6 +12,7 @@ project "Test Application"
       "../Walnut/vendor/imgui",
       "../Walnut/vendor/glfw/include",
       "../Walnut/vendor/glm",
+      "../Walnut/vendor/stb_image",
 
       "../Walnut/Walnut/src",
 

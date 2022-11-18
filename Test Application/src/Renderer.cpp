@@ -3,11 +3,6 @@
 #include "Walnut/Random.h"
 
 
-template<typename t>
-t clamp(t n, t h, t l) {
-	return n >= h ? h : n <= l ? l : n;
-}
-
 uint32_t vec2rgba(glm::vec4 c) {
 	return
 		(uint32_t)(c.a * 255.f) << 24 |
@@ -117,13 +112,15 @@ glm::vec3 Renderer::evaluateRay(const Ray& r, size_t b) {
 	if (b > MAX_BOUNCES) { return glm::vec3{}; }
 	Hit hit;
 	if (const Interactable* obj = this->active_scene->interacts(r, hit)) {
+		float lum = obj->emmission(hit);
+		glm::vec3 clr = obj->albedo(hit);
+		if (((clr.r + clr.g + clr.b) / 3.f * lum) >= 1.f) {
+			return clr * lum;
+		}
 		Ray redirect;
 		if (obj->redirect(r, hit, redirect)) {
-			return obj->albedo(hit)
-				* (this->evaluateRay(redirect, b + 1) + obj->emmission(hit));
+			return clr * (this->evaluateRay(redirect, b + 1) + lum);
 		}
 	}
 	return this->active_scene->albedo(hit);
-	//return o->getAlbedo() * (o->getLuminance()/* * BRIGHTNESS_CONSTANT / (float)pow(i.ptime, 2)*/
-	//	+ /*0.5f * */this->evaluateRay(scatter, b + 1));
 }
