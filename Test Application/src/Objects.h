@@ -8,14 +8,14 @@
 
 inline static const Scene
 	demo{
-		std::make_shared<Sphere>(glm::vec3{0.f, 0.f, 0.f}, 0.5f, glm::vec3{1.f, 0.f, 1.f}),
-		std::make_shared<Sphere>(glm::vec3{0.f, -10001.f, 0.f}, 10000.f, glm::vec3{1.f, 1.f, 0.f}),
-		std::make_shared<Sphere>(glm::vec3{0.f, 0.f, -5.f}, 0.75f, glm::vec3{0.f, 1.f, 1.f}),
+		std::make_shared<Sphere>(glm::vec3{0.f, 0.f, 0.f}, 0.5f, PhysicalBase::DEFAULT.get(), StaticColor::DEFAULT.get()),
+		std::make_shared<Sphere>(glm::vec3{0.f, -10001.f, 0.f}, 10000.f, PhysicalBase::DEFAULT.get(), StaticColor::DEFAULT.get()),
+		std::make_shared<Sphere>(glm::vec3{0.f, 0.f, -5.f}, 0.75f, PhysicalBase::DEFAULT.get(), StaticColor::DEFAULT.get()),
 		std::make_shared<Quad>(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{1, 1, 0}, glm::vec3{1, 0, 0}),
 		std::make_shared<Quad>(glm::vec3{0, 0, 0}, glm::vec3{0, 1, 0}, glm::vec3{0, 1, 1}, glm::vec3{0, 0, 1}),
 		std::make_shared<Quad>(glm::vec3{0, 0, 0}, glm::vec3{1, 0, 0}, glm::vec3{1, 0, 1}, glm::vec3{0, 0, 1}),
-		std::make_shared<Sphere>(glm::vec3{-1, -0.5, -1}, 0.5, glm::vec3{1.f}, PhysicalBase::LIGHT.get()),
-		std::make_shared<Sphere>(glm::vec3{-4.f, 3.f, 2.f}, 1.f, glm::vec3{0.f, 1.f, 0.5f}, PhysicalBase::LIGHT.get())
+		std::make_shared<Sphere>(glm::vec3{-1, -0.5, -1}, 0.5, PhysicalBase::DEFAULT.get(), StaticColor::DEFAULT.get(), 2.f),
+		std::make_shared<Sphere>(glm::vec3{-4.f, 3.f, 2.f}, 1.f, PhysicalBase::DEFAULT.get(), StaticColor::DEFAULT.get(), 2.f)
 	}/*,
 	frc_field{
 		std::make_unique<Quad>(

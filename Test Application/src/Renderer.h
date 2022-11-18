@@ -31,8 +31,8 @@ public:
 		c.CalculateRandomDirections(this->rand_rays[2]);
 	}
 
-	bool
-		accumulate = true;
+	bool accumulate = true;
+
 	static inline glm::vec3
 		SKY_COLOR{ 0.2f };
 	static inline int

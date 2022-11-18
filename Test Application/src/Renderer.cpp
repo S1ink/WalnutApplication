@@ -107,22 +107,23 @@ glm::vec4 Renderer::computeUnshaded(size_t n) {
 		this->active_camera->GetRayDirections()[n]
 	};
 	Hit hit;
-	if(this->active_scene->interacts(ray, hit)) {
-		return glm::vec4{ 1.f };
+	if(const Interactable* obj = this->active_scene->interacts(ray, hit)) {
+		return glm::vec4{ obj->albedo(hit), 1.f };
 	}
-	return glm::vec4{ this->active_scene->skyColor(ray), 1.f };
+	return glm::vec4{ this->active_scene->albedo(hit), 1.f };
 }
 
 glm::vec3 Renderer::evaluateRay(const Ray& r, size_t b) {
 	if (b > MAX_BOUNCES) { return glm::vec3{}; }
 	Hit hit;
-	if (this->active_scene->interacts(r, hit)) {
+	if (const Interactable* obj = this->active_scene->interacts(r, hit)) {
 		Ray redirect;
-		if (hit.surface && hit.surface->redirect(r, hit, redirect)) {
-			return glm::vec3{1.f} * (0.5f * this->evaluateRay(redirect, b + 1) + hit.surface->gamma());
+		if (obj->redirect(r, hit, redirect)) {
+			return obj->albedo(hit)
+				* (this->evaluateRay(redirect, b + 1) + obj->emmission(hit));
 		}
 	}
-	return this->active_scene->skyColor(r);
+	return this->active_scene->albedo(hit);
 	//return o->getAlbedo() * (o->getLuminance()/* * BRIGHTNESS_CONSTANT / (float)pow(i.ptime, 2)*/
 	//	+ /*0.5f * */this->evaluateRay(scatter, b + 1));
 }

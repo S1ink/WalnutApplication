@@ -25,8 +25,8 @@ inline static glm::vec3 center(std::initializer_list<glm::vec3> pts) {
 //	}
 //}
 
-class Material;
-class Texture;
+//class Material;
+//class Texture;
 
 struct Ray {
 	glm::vec3 origin{0.f};
@@ -36,29 +36,37 @@ struct Hit {
 	bool reverse_intersect{false};	// the normal is on the "inside" of the surface
 	float ptime{0.f};		// time along source ray
 	Ray normal{};			// normal with origin at the hit point
-	const Material* surface{ nullptr };	// the surface that was hit
-	const Texture* texture{ nullptr };
+	//const Material* surface{ nullptr };	// the surface that was hit
+	//const Texture* texture{ nullptr };
+	glm::vec2 uv{ -1.f };
 };
 
 
 class Interactable {
 public:
-	virtual bool interacts(
+	virtual const Interactable* interacts(	// returns the actual entity that was intersected with (useful for 'container' Interactable's)
 		const Ray& source, Hit& hit,
-		float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()
+		float t_min = 1e-5f,
+		float t_max = std::numeric_limits<float>::infinity()
 	) const = 0;
+	virtual bool redirect(
+		const Ray& source,
+		const Hit& interaction, Ray& redirected
+	) const = 0;
+
+	inline virtual float emmission(Hit& hit) const { return 0.f; }
+	inline virtual glm::vec3 albedo(Hit& hit) const { return glm::vec3{ 0.5f }; }
 
 	inline virtual void invokeGuiOptions() {}
 };
 class Material {
 public:
 	virtual bool redirect(const Ray& source, const Hit& interaction, Ray& redirected) const = 0;
-	virtual float gamma() const { return 0.f; }
 	inline virtual void invokeGuiOptions() {}
 };
 class Texture {
 public:
-	virtual glm::vec3 albedo(glm::vec2 uv) = 0;
+	virtual glm::vec3 albedo(glm::vec2 uv) const = 0;
 	inline virtual void invokeGuiOptions() {}
 };
 
@@ -70,18 +78,16 @@ public:
 		float roughness = 1.f,
 		float glossness = 0.f,
 		float transparency = 0.f,
-		float luminance = 0.f,
 		float refr_index = 1.f
 	) :
-		roughness(roughness), glossiness(glossness), transparency(transparency), luminance(luminance), refraction_index(refr_index)
+		roughness(roughness), glossiness(glossness), transparency(transparency), refraction_index(refr_index)
 	{}
 
-	static const std::unique_ptr<Material> DEFAULT, LIGHT;
+	static const std::unique_ptr<Material> DEFAULT;
 
-	float roughness, glossiness, transparency, refraction_index, luminance;
+	float roughness, glossiness, transparency, refraction_index;
 
 	virtual bool redirect(const Ray& source, const Hit& interaction, Ray& redirected) const override;
-	inline virtual float gamma() const { return this->luminance; }
 	virtual void invokeGuiOptions() override;
 
 	static bool diffuse(const Ray& normal, Ray& redirect);
@@ -91,11 +97,13 @@ public:
 };
 class StaticColor : public Texture {
 public:
-	inline StaticColor(glm::vec3 albedo = glm::vec3{0.f}) : color(albedo) {}
+	inline StaticColor(glm::vec3 albedo = glm::vec3{0.5f}) : color(albedo) {}
+
+	static const std::unique_ptr<Texture> DEFAULT;
 
 	glm::vec3 color;
 
-	inline virtual glm::vec3 albedo(glm::vec2) override { return this->color; }
+	inline virtual glm::vec3 albedo(glm::vec2) const override { return this->color; }
 	virtual void invokeGuiOptions() override;
 
 };
@@ -161,17 +169,26 @@ public:
 	inline Sphere(
 		glm::vec3 p = glm::vec3{ 0.f },
 		float r = 0.5f,
-		glm::vec3 c = glm::vec3{ 1.f },
-		const Material* m = PhysicalBase::DEFAULT.get()
+		Material* m = PhysicalBase::DEFAULT.get(),
+		Texture* t = StaticColor::DEFAULT.get(),
+		float l = 0.f
 	) :
-		position(p), albedo(c), mat(m), rad(r)
+		position(p), radius(r), luminance(l), mat(m), tex(t) 
 	{}
 
-	glm::vec3 position, albedo;
-	float rad{ 0.5f };
-	const Material* mat;
+	glm::vec3 position;
+	float radius{ 0.5f }, luminance{ 0.f };
+	Material* mat;
+	Texture* tex;
 
-	virtual bool interacts(const Ray& source, Hit& hit, float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()) const override;
+	virtual const Interactable* interacts(
+		const Ray& source, Hit& hit, float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()) const override;
+	virtual glm::vec3 albedo(Hit& hit) const override;
+	inline virtual bool redirect(const Ray& source, const Hit& hit, Ray& redirected) const override
+		{ return this->mat ? this->mat->redirect(source, hit, redirected) : false; }
+	inline virtual float emmission(Hit& hit) const override
+		{ return this->luminance; }
+
 	virtual void invokeGuiOptions() override;
 
 
@@ -179,20 +196,31 @@ public:
 class Triangle : public Interactable {
 public:
 	Triangle(
-		glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 c,
-		const Material* m = PhysicalBase::DEFAULT.get()
+		glm::vec3 p1, glm::vec3 p2, glm::vec3 p3,
+		Material* m = PhysicalBase::DEFAULT.get(),
+		Texture* t = StaticColor::DEFAULT.get(),
+		float l = 0.f
 	) :
-		position(center({ p1, p2, p3 })), albedo(c), mat(m), p1(p1), p2(p2), p3(p3),
-		e1(p2 - p1), e2(p3 - p1), norm(glm::normalize(glm::cross(this->e1, this->e2)))
+		position(center({ p1, p2, p3 })), p1(p1), p2(p2), p3(p3),
+		e1(p2 - p1), e2(p3 - p1), norm(glm::normalize(glm::cross(this->e1, this->e2))),
+		luminance(l), mat(m), tex(t)
 	{}
 
-	glm::vec3 position, albedo;
+	glm::vec3 position;
 	glm::vec3 p1, p2, p3, e1, e2, norm;
-	const Material* mat;
+	float luminance;
+	Material* mat;
+	Texture* tex;
 
 	void move(glm::vec3);
 	
-	virtual bool interacts(const Ray& source, Hit& hit, float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()) const override;
+	virtual const Interactable* interacts(const Ray& source, Hit& hit, float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()) const override;
+	virtual glm::vec3 albedo(Hit& hit) const override;
+	inline virtual bool redirect(const Ray& source, const Hit& hit, Ray& redirected) const override
+		{ return this->mat ? this->mat->redirect(source, hit, redirected) : false; }
+	inline virtual float emmission(Hit& hit) const override
+		{ return this->luminance; }
+	
 	virtual void invokeGuiOptions() override;
 
 
@@ -201,18 +229,24 @@ class Quad : public Interactable {
 public:
 	Quad(
 		glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 p4,
-		glm::vec3 c = glm::vec3{ 1.f },
-		const Material* m = PhysicalBase::DEFAULT.get()
+		Material* m = PhysicalBase::DEFAULT.get(),
+		Texture* t = StaticColor::DEFAULT.get(),
+		float l = 0.f
 	) :
-		h1(p1, p2, p4, c, m), h2(p3, p2, p4, c, m)
+		h1(p1, p2, p4, m, t, l), h2(p3, p2, p4, m, t, l)
 	{}
 
 	Triangle h1, h2;
 
 	void move(glm::vec3);
 	
-	virtual bool interacts(const Ray& source, Hit& hit, float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()) const override
-		{ return this->h1.interacts(source, hit, t_min, t_max) || this->h2.interacts(source, hit, t_min, t_max); }
+	virtual const Interactable* interacts(
+		const Ray& source, Hit& hit, float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()) const override;
+	virtual glm::vec3 albedo(Hit& hit) const override;
+	inline virtual bool redirect(const Ray& source, const Hit& hit, Ray& redirected) const override
+		{ return this->h1.mat ? this->h1.mat->redirect(source, hit, redirected) : false; }
+	inline virtual float emmission(Hit& hit) const override
+		{ return this->h1.luminance; }
 	virtual void invokeGuiOptions() override;
 
 
@@ -225,9 +259,13 @@ public:
 
 	glm::vec3 sky_color{0.2f};
 
-	virtual bool interacts(const Ray& source, Hit& hit, float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()) const override;
+	virtual const Interactable* interacts(
+		const Ray& source, Hit& hit, float t_min = 1e-5f, float t_max = std::numeric_limits<float>::infinity()) const override;
+	inline virtual bool redirect(const Ray& source, const Hit& interaction, Ray& redirected) const override
+		{ return false; }
+	inline virtual glm::vec3 albedo(Hit& hit) const
+		{ return this->sky_color; }
 	virtual void invokeGuiOptions() override;
-	inline glm::vec3 skyColor(const Ray& ray) const { return this->sky_color; }
 
 private:
 	std::vector<std::shared_ptr<Interactable>> objects;
@@ -238,15 +276,25 @@ class MaterialManager {
 public:
 	MaterialManager() = default;
 
-	template<typename Mat_t>
+	/*template<typename Mat_t>
 	void add(size_t);
 	template<typename Mat_t>
-	void addExisting(std::unique_ptr<Mat_t>&&);
+	void addExisting(std::unique_ptr<Mat_t>&&);*/
 
 	void invokeGui();
 
 
 private:
 	std::vector<std::unique_ptr<Material>> materials;
+
+};
+class TextureManager {
+public:
+	TextureManager() = default;
+
+	void invokeGui();
+
+private:
+	std::vector<std::unique_ptr<Texture>> textures;
 
 };

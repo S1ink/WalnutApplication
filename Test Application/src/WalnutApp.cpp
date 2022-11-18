@@ -74,24 +74,27 @@ public:
 			ImGui::Separator();
 			ImGui::ColorEdit3("Sky Color", glm::value_ptr(this->scene.sky_color));
 			if (ImGui::DragInt("Bounce Limit", &Renderer::MAX_BOUNCES, 1.f, 1, 100) && Renderer::MAX_BOUNCES < 1) { Renderer::MAX_BOUNCES = 1; }
-			if (ImGui::DragInt("Samples", &Renderer::SAMPLE_RAYS, 1.f, 1, 100) && Renderer::SAMPLE_RAYS < 1) { Renderer::SAMPLE_RAYS = 1; }
-			ImGui::Separator();
-			this->scene.invokeGuiOptions();
-			
+			if (ImGui::DragInt("Samples", &Renderer::SAMPLE_RAYS, 1.f, 1, 100) && Renderer::SAMPLE_RAYS < 1) { Renderer::SAMPLE_RAYS = 1; }		
 
 		} ImGui::End();
+		ImGui::Begin("Scene"); {
+			this->scene.invokeGuiOptions();
+		} ImGui::End();
 		ImGui::Begin("Materials"); {
-			ImGui::PushID("default_mat");
+			/*ImGui::PushID("default_mat");
 			if (ImGui::CollapsingHeader("Default Material")) {
 				PhysicalBase::DEFAULT->invokeGuiOptions();
 			}
-			ImGui::PopID();
-			ImGui::PushID("light_mat");
+			ImGui::PopID();*/
+			/*ImGui::PushID("light_mat");
 			if (ImGui::CollapsingHeader("Light Source Material")) {
 				PhysicalBase::LIGHT->invokeGuiOptions();
 			}
-			ImGui::PopID();
+			ImGui::PopID();*/
 			this->mats.invokeGui();
+		} ImGui::End();
+		ImGui::Begin("Textures"); {
+			this->texts.invokeGui();
 		} ImGui::End();
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
@@ -132,6 +135,7 @@ private:
 	Camera camera{60.f, 0.1f, 100.f};
 	Scene scene;
 	MaterialManager mats;
+	TextureManager texts;
 	uint32_t frame_width = 0, frame_height = 0;
 	std::thread rendt;
 	
