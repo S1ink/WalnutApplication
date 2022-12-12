@@ -1,5 +1,8 @@
 #include "Camera.h"
 
+#include <thread>
+#include <iostream>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -89,22 +92,46 @@ bool Camera::OnUpdate(float ts)
 	if (moved)
 	{
 		RecalculateView();
-		RecalculateRayDirections();
+		//RecalculateRayDirections();
+		std::thread(&Camera::RecalculateRayDirections, this).detach();
 	}
 
 	return moved;
 }
 
-void Camera::OnResize(uint32_t width, uint32_t height)
+void Camera::OnResize(uint32_t width, uint32_t height, uint32_t depth)
 {
+	if (depth > 0) depth = 1;
 	if (width == m_ViewportWidth && height == m_ViewportHeight)
+	{
+		if (depth != m_ArrayDepth)
+		{
+			//RecalculateRayDirections();
+			std::thread(&Camera::RecalculateRayDirections, this).detach();
+		}
 		return;
+	}
 
 	m_ViewportWidth = width;
 	m_ViewportHeight = height;
 
 	RecalculateProjection();
-	RecalculateRayDirections();
+	//RecalculateRayDirections();
+	std::thread(&Camera::RecalculateRayDirections, this).detach();
+}
+
+void Camera::OnReview(float verticalFOV, float nearClip, float farClip)
+{
+	if (verticalFOV == m_VerticalFOV && nearClip == m_NearClip && farClip == m_NearClip)
+		return;
+
+	m_VerticalFOV = verticalFOV;
+	m_NearClip = nearClip;
+	m_FarClip = farClip;
+
+	RecalculateProjection();
+	//RecalculateRayDirections();
+	std::thread(&Camera::RecalculateRayDirections, this).detach();
 }
 
 float Camera::GetRotationSpeed()
@@ -126,38 +153,112 @@ void Camera::RecalculateView()
 
 void Camera::RecalculateRayDirections()
 {
-	m_RayDirections.resize(m_ViewportWidth * m_ViewportHeight);
+	m_RayAccess.lock();
+	m_AA_RayAccess.lock();
 
-	for (uint32_t y = 0; y < m_ViewportHeight; y++)
+	std::cout << "Calculating Ray Directions..." << std::endl;
+
+	m_RayDirections.resize(m_ArrayDepth);
+	float rx = 0.f, ry = 0.f;
+
+	if (m_ArrayDepth == 0)	// theoretically pointless but still good to have
+		m_RayAccess.unlock();
+	for (size_t r = 0; r < m_ArrayDepth; r++)
 	{
-		for (uint32_t x = 0; x < m_ViewportWidth; x++)
+		m_RayDirections[r].resize(m_ViewportWidth * m_ViewportHeight);
+		if (r != 0)
 		{
-			glm::vec2 coord = { (float)x / (float)m_ViewportWidth, (float)y / (float)m_ViewportHeight };
-			coord = coord * 2.0f - 1.0f; // -1 -> 1
-
-			glm::vec4 target = m_InverseProjection * glm::vec4(coord.x, coord.y, 1, 1);
-			glm::vec3 rayDirection = glm::vec3(m_InverseView * glm::vec4(glm::normalize(glm::vec3(target) / target.w), 0)); // World space
-			m_RayDirections[x + y * m_ViewportWidth] = rayDirection;
+			rx = Random::Float();
+			ry = Random::Float();
 		}
+
+		for (uint32_t y = 0; y < m_ViewportHeight; y++)
+		{
+			for (uint32_t x = 0; x < m_ViewportWidth; x++)
+			{
+				glm::vec2 coord = { (x + rx) / (float)m_ViewportWidth, (y + ry) / (float)m_ViewportHeight };
+				coord = coord * 2.0f - 1.0f; // -1 -> 1
+
+				glm::vec4 target = m_InverseProjection * glm::vec4(coord.x, coord.y, 1, 1);
+				m_RayDirections[r][x + y * m_ViewportWidth] =
+					glm::vec3(m_InverseView * glm::vec4(glm::normalize(glm::vec3(target) / target.w), 0)); // World space
+			}
+		}
+
+		std::cout << "Calculated Ray Directions for array " << r << std::endl;
+
+		if (r == 0)
+			m_RayAccess.unlock();
 	}
+	m_AA_RayAccess.unlock();
 }
 
 void Camera::CalculateRandomDirections(std::vector<glm::vec3>& rays) const
 {
 	rays.resize(m_ViewportWidth * m_ViewportHeight);
 
+	float rx = Random::Float();
+	float ry = Random::Float();
+
 	for (uint32_t y = 0; y < m_ViewportHeight; y++)
 	{
 		for (uint32_t x = 0; x < m_ViewportHeight; x++)
 		{
-			float rx = Random::Float();
-			float ry = Random::Float();
 			glm::vec2 coord = { (x + rx) / (float)m_ViewportWidth, (y + ry) / (float)m_ViewportHeight };
 			coord = coord * 2.0f - 1.0f; // -1 -> 1
 
 			glm::vec4 target = m_InverseProjection * glm::vec4(coord.x, coord.y, 1, 1);
-			glm::vec3 rayDirection = glm::vec3(m_InverseView * glm::vec4(glm::normalize(glm::vec3(target) / target.w), 0)); // World space
-			rays[x + y * m_ViewportWidth] = rayDirection;
+			rays[x + y * m_ViewportWidth] =
+				glm::vec3(m_InverseView * glm::vec4(glm::normalize(glm::vec3(target) / target.w), 0));  // World space
 		}
 	}
+}
+
+void Camera::CalculateRandomDirections(std::vector<std::vector<glm::vec3>>& rays) const
+{
+	for (std::vector<glm::vec3>& rarr : rays) {
+		this->CalculateRandomDirections(rarr);
+	}
+}
+
+//void Camera::CalculateRandomDirectionsSimple(std::vector<glm::vec3>& rays) const
+//{
+//	glm::vec3 min_variance = m_RayDirections[1 + m_ViewportWidth] - m_RayDirections[0];	// the top-leftmost ray minus the one exactly 1 pixel diagonal
+//	glm::vec3 rand = min_variance * Random::Float();	// some random ray that is inbetween the top 2 top-leftmost pixel directions
+//}
+
+const std::vector<glm::vec3>& Camera::ScopedRayAccess::GetRayDirections()
+{
+	if (!locked)
+	{
+		parent->m_RayAccess.lock();
+		locked = true;
+	}
+	return parent->m_RayDirections[0];
+}
+const std::vector<std::vector<glm::vec3>>& Camera::ScopedRayAccess::GetAARayDirections()
+{
+	if (!aa_locked)
+	{
+		parent->m_AA_RayAccess.lock();
+		aa_locked = true;
+	}
+	return parent->m_RayDirections;
+}
+void Camera::ScopedRayAccess::UnlockAccess()
+{
+	if (locked)
+	{
+		parent->m_RayAccess.unlock();
+		locked = false;
+	}
+	if (aa_locked)
+	{
+		parent->m_AA_RayAccess.unlock();
+		aa_locked = false;
+	}
+}
+Camera::ScopedRayAccess::~ScopedRayAccess()
+{
+	UnlockAccess();
 }

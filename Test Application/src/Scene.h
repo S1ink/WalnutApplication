@@ -55,17 +55,17 @@ public:
 	inline virtual float emmission(Hit& hit) const { return 0.f; }
 	inline virtual glm::vec3 albedo(Hit& hit) const { return glm::vec3{ 0.5f }; }
 
-	inline virtual void invokeGuiOptions() {}
+	inline virtual bool invokeGuiOptions() { return false; }	// should return true if anything was updated
 };
 class Material {
 public:
 	virtual bool redirect(const Ray& source, const Hit& interaction, Ray& redirected) const = 0;
-	inline virtual void invokeGuiOptions() {}
+	inline virtual bool invokeGuiOptions() { return false; }
 };
 class Texture {
 public:
 	virtual glm::vec3 albedo(glm::vec2 uv) const = 0;
-	inline virtual void invokeGuiOptions() {}
+	inline virtual bool invokeGuiOptions() { return false; }
 };
 
 
@@ -86,7 +86,7 @@ public:
 	float roughness, glossiness, transparency, refraction_index;
 
 	virtual bool redirect(const Ray& source, const Hit& interaction, Ray& redirected) const override;
-	virtual void invokeGuiOptions() override;
+	virtual bool invokeGuiOptions() override;
 
 	static bool diffuse(const Ray& normal, Ray& redirect);
 	static bool reflect(const Ray& source, const Hit& hit, Ray& redirect, float gloss = 0.f);
@@ -102,7 +102,7 @@ public:
 	glm::vec3 color;
 
 	inline virtual glm::vec3 albedo(glm::vec2) const override { return this->color; }
-	virtual void invokeGuiOptions() override;
+	virtual bool invokeGuiOptions() override;
 
 };
 class ImageTexture : public Texture {
@@ -118,7 +118,7 @@ public:
 		{ if(this->data) { free(this->data); } }
 
 	virtual glm::vec3 albedo(glm::vec2) const override;
-	virtual void invokeGuiOptions() override;
+	virtual bool invokeGuiOptions() override;
 
 	uint8_t* data, pixel_bytes{ 3U };
 	uint32_t width, height;
@@ -152,7 +152,7 @@ public:
 	inline virtual float emmission(Hit& hit) const override
 		{ return this->luminance; }
 
-	virtual void invokeGuiOptions() override;
+	virtual bool invokeGuiOptions() override;
 
 
 };
@@ -184,7 +184,7 @@ public:
 	inline virtual float emmission(Hit& hit) const override
 		{ return this->luminance; }
 	
-	virtual void invokeGuiOptions() override;
+	virtual bool invokeGuiOptions() override;
 
 
 };
@@ -212,10 +212,16 @@ public:
 		{ return this->h1.mat ? this->h1.mat->redirect(source, hit, redirected) : false; }
 	inline virtual float emmission(Hit& hit) const override
 		{ return this->h1.luminance; }
-	virtual void invokeGuiOptions() override;
+	virtual bool invokeGuiOptions() override;
 
 
 };
+
+/* TODO:
+* Add Cube / Rect Prism (Rect3D)
+* Add Size/Rotation wrappers for triangle/quad/^^^
+* Improve tri/quad/^^^ GUI options for pos/rotation/size
+*/
 
 
 class Scene : public Interactable {
@@ -230,7 +236,7 @@ public:
 		{ return false; }
 	inline virtual glm::vec3 albedo(Hit& hit) const
 		{ return this->sky_color; }
-	virtual void invokeGuiOptions() override;
+	virtual bool invokeGuiOptions() override;
 
 private:
 	std::vector<std::shared_ptr<Interactable>> objects;
@@ -246,7 +252,7 @@ public:
 	template<typename Mat_t>
 	void addExisting(std::unique_ptr<Mat_t>&&);*/
 
-	void invokeGui();
+	bool invokeGui();	// returns if any settings were updated --> this does not necessarily correlate to if anything within the scene changed
 
 private:
 	std::vector<std::unique_ptr<Material>> materials;
@@ -256,7 +262,7 @@ class TextureManager {
 public:
 	TextureManager() = default;
 
-	void invokeGui();
+	bool invokeGui();	// returns if any settings were updated --> this does not necessarily correlate to if anything within the scene changed
 
 private:
 	std::vector<std::unique_ptr<Texture>> textures;

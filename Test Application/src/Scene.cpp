@@ -1,12 +1,12 @@
 #include "Scene.h"
 
-#include "Util.h"
-
 #include <string>
 #include <iostream>
 
 #include <imgui.h>
 #include <glm/gtc/type_ptr.hpp>
+
+#include "Util.h"
 
 
 const std::unique_ptr<Material>
@@ -14,51 +14,15 @@ const std::unique_ptr<Material>
 const std::unique_ptr<Texture>
 	StaticColor::DEFAULT{ std::make_unique<StaticColor>() };
 
-//Material::Material(float r, float g, float t, float l, float ir) :
-//	roughness(r), glossiness(g), transparency(t), refraction_index(ir), luminance(l)
-//{
-//	Material::materials.emplace_back(this);
-//	this->index = Material::materials.size() - 1;
-//}
-//Material::Material(const Material& o) :
-//	roughness(o.roughness), glossiness(o.glossiness),
-//	transparency(o.transparency), refraction_index(o.refraction_index),
-//	luminance(o.luminance)
-//{
-//	Material::materials.emplace_back(this);
-//	this->index = Material::materials.size() - 1;
-//}
-//Material::~Material() {
-//	Material::materials.erase(Material::materials.begin() + this->index);
-//	for (size_t i = this->index; i < Material::materials.size(); i++) {
-//		Material::materials[i]->index = i;
-//	}
-//}
 
-void PhysicalBase::invokeGuiOptions() {
-	ImGui::DragFloat("Roughness", &this->roughness, 0.005, 0.f, 1.f);
-	ImGui::DragFloat("Glossiness", &this->glossiness, 0.005, 0.f, 1.f);
-	ImGui::DragFloat("Transparency", &this->transparency, 0.005, 0.f, 1.f);
-	ImGui::DragFloat("Refraction Index", &this->refraction_index, 0.005, 0.5, 10.f);
-	//ImGui::DragFloat("Luminance", &this->luminance, 0.005, 0.f, 10.f);
+bool PhysicalBase::invokeGuiOptions() {
+	return ImGui::DragFloat("Roughness", &this->roughness, 0.005, 0.f, 1.f)
+		|| ImGui::DragFloat("Glossiness", &this->glossiness, 0.005, 0.f, 1.f)
+		|| ImGui::DragFloat("Transparency", &this->transparency, 0.005, 0.f, 1.f)
+		|| ImGui::DragFloat("Refraction Index", &this->refraction_index, 0.005, 0.5, 10.f);
 }
-//void Material::invokeManagerGui() {
-//	size_t i = 0;
-//	for (Material* mat : materials) {
-//		ImGui::PushID(i);
-//		if (ImGui::CollapsingHeader(("Mat " + std::to_string(i)).c_str())) {
-//			mat->invokeGui();
-//		}
-//		ImGui::PopID();
-//		i++;
-//	}
-//	if (ImGui::Button("Add Material")) {
-//		Material* m = new Material;
-//	}
-//}
 
 bool PhysicalBase::redirect(const Ray& src, const Hit& hit, Ray& out) const {
-	//if (this->luminance >= 1.f) { return false; }
 	float seed = Walnut::Random::Float();
 	if (seed < this->roughness) {
 		return diffuse(hit.normal, out);
@@ -99,8 +63,8 @@ bool PhysicalBase::refract(const Ray& src, const Hit& hit, float ir, Ray& out, f
 	return true;
 }
 
-void StaticColor::invokeGuiOptions() {
-	ImGui::ColorEdit3("Albedo", glm::value_ptr(this->color));
+bool StaticColor::invokeGuiOptions() {
+	return ImGui::ColorEdit3("Albedo", glm::value_ptr(this->color));
 }
 
 glm::vec3 ImageTexture::albedo(glm::vec2 uv) const {
@@ -117,7 +81,7 @@ glm::vec3 ImageTexture::albedo(glm::vec2 uv) const {
 		pix[2] / 255.f
 	};
 }
-void ImageTexture::invokeGuiOptions() {
+bool ImageTexture::invokeGuiOptions() {
 	if (ImGui::Button("Load Texture Image")) {
 		std::string f;
 		if (openFile(f)) {		// explorer dialogue
@@ -134,9 +98,11 @@ void ImageTexture::invokeGuiOptions() {
 					<< (int)(d[(x) * (y) * 3 - 2]) << ", "
 					<< (int)(d[(x) * (y) * 3 - 1])
 					<< "]" << std::endl;*/
+				return true;
 			}
 		}
 	}
+	return false;
 }
 
 
@@ -236,103 +202,134 @@ void Quad::move(glm::vec3 p) {
 	this->h2.p3 += p;
 }
 
-void Sphere::invokeGuiOptions() {
+bool Sphere::invokeGuiOptions() {
+	bool r = false;
 	if (ImGui::BeginDragDropTarget()) {
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("MATERIAL_PTR_PTR")) {
 			if (payload->DataSize == sizeof(Material*)) {
 				this->mat = *((Material**)(payload->Data));
+				r = true;
 			}
 		}
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TEXTURE_PTR_PTR")) {
 			if (payload->DataSize == sizeof(Texture*)) {
 				this->tex = *((Texture**)(payload->Data));
+				r = true;
 			}
 		}
 		ImGui::EndDragDropTarget();
 	}
-	ImGui::DragFloat3("Position", glm::value_ptr(this->position), 0.05);
-	ImGui::DragFloat("Radius", &this->radius, 0.05);
-	ImGui::DragFloat("Luminance", &this->luminance, 0.05, 0, 100);
-	if (ImGui::Button("Reset Mat")) { this->mat = PhysicalBase::DEFAULT.get(); }
+	r |= ImGui::DragFloat3("Position", glm::value_ptr(this->position), 0.05);
+	r |= ImGui::DragFloat("Radius", &this->radius, 0.05);
+	r |= ImGui::DragFloat("Luminance", &this->luminance, 0.05, 0, 100);
+	if (ImGui::Button("Reset Mat") && this->mat != PhysicalBase::DEFAULT.get()) {
+		this->mat = PhysicalBase::DEFAULT.get();
+		r = true;
+	}
 	ImGui::SameLine();
-	if (ImGui::Button("Reset Texture")) { this->tex = StaticColor::DEFAULT.get(); }
+	if (ImGui::Button("Reset Texture") && this->tex != StaticColor::DEFAULT.get()) {
+		this->tex = StaticColor::DEFAULT.get();
+		r = true;
+	}
 	if (this->mat && ImGui::TreeNode("Material Editor")) {
-		this->mat->invokeGuiOptions();
+		r |= this->mat->invokeGuiOptions();
 		ImGui::TreePop();
 		ImGui::Separator();
 	}
 	if (this->tex && ImGui::TreeNode("Texture Editor")) {
-		this->tex->invokeGuiOptions();
+		r |= this->tex->invokeGuiOptions();
 		ImGui::TreePop();
 		ImGui::Separator();
 	}
-	//ImGui::Button("Aquire Property");
+	return r;
 }
-void Triangle::invokeGuiOptions() {
+bool Triangle::invokeGuiOptions() {
+	bool r = false;
 	if (ImGui::BeginDragDropTarget()) {
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("MATERIAL_PTR_PTR")) {
 			if (payload->DataSize == sizeof(Material*)) {
 				this->mat = *((Material**)(payload->Data));
+				r = true;
 			}
 		}
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TEXTURE_PTR_PTR")) {
 			if (payload->DataSize == sizeof(Texture*)) {
 				this->tex = *((Texture**)(payload->Data));
+				r = true;
 			}
 		}
 		ImGui::EndDragDropTarget();
 	}
 	if (ImGui::DragFloat3("Position", glm::value_ptr(this->position), 0.05)) {
 		this->move(this->position);
+		r = true;
 	}
-	ImGui::DragFloat("Luminance", &this->luminance, 0.05, 0, 100);
-	if (ImGui::Button("Reset Mat")) { this->mat = PhysicalBase::DEFAULT.get(); }
+	r |= ImGui::DragFloat("Luminance", &this->luminance, 0.05, 0, 100);
+	if (ImGui::Button("Reset Mat") && this->mat != PhysicalBase::DEFAULT.get()) {
+		this->mat = PhysicalBase::DEFAULT.get();
+		r = true;
+	}
 	ImGui::SameLine();
-	if (ImGui::Button("Reset Texture")) { this->tex = StaticColor::DEFAULT.get(); }
+	if (ImGui::Button("Reset Texture") && this->tex != StaticColor::DEFAULT.get()) {
+		this->tex = StaticColor::DEFAULT.get();
+		r = true;
+	}
 	if (this->mat && ImGui::TreeNode("Material Editor")) {
-		this->mat->invokeGuiOptions();
+		r |= this->mat->invokeGuiOptions();
 		ImGui::TreePop();
 		ImGui::Separator();
 	}
 	if (this->tex && ImGui::TreeNode("Texture Editor")) {
-		this->tex->invokeGuiOptions();
+		r |= this->tex->invokeGuiOptions();
 		ImGui::TreePop();
 		ImGui::Separator();
 	}
+	return r;
 }
-void Quad::invokeGuiOptions() {
+bool Quad::invokeGuiOptions() {
+	bool r = false;
 	if (ImGui::BeginDragDropTarget()) {
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("MATERIAL_PTR_PTR")) {
 			if (payload->DataSize == sizeof(Material*)) {
 				this->h1.mat = this->h2.mat = *((Material**)(payload->Data));
+				r = true;
 			}
 		}
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TEXTURE_PTR_PTR")) {
 			if (payload->DataSize == sizeof(Texture*)) {
 				this->h1.tex = this->h2.tex = *((Texture**)(payload->Data));
+				r = true;
 			}
 		}
 		ImGui::EndDragDropTarget();
 	}
 	if (ImGui::DragFloat3("Position", glm::value_ptr(this->h1.position), 0.05)) {
 		this->move(this->h1.position);
+		r = true;
 	}
 	if (ImGui::DragFloat("Luminance", &this->h1.luminance, 0.05, 0, 100)) {
 		this->h2.luminance = this->h1.luminance;
+		r = true;
 	}
-	if (ImGui::Button("Reset Mat")) { this->h1.mat = this->h2.mat = PhysicalBase::DEFAULT.get(); }
+	if (ImGui::Button("Reset Mat") && this->h1.mat != PhysicalBase::DEFAULT.get()) {
+		this->h1.mat = this->h2.mat = PhysicalBase::DEFAULT.get();
+		r = true;
+	}
 	ImGui::SameLine();
-	if (ImGui::Button("Reset Texture")) { this->h1.tex = this->h2.tex = StaticColor::DEFAULT.get(); }
+	if (ImGui::Button("Reset Texture") && this->h1.tex != StaticColor::DEFAULT.get()) {
+		this->h1.tex = this->h2.tex = StaticColor::DEFAULT.get();
+	}
 	if (this->h1.mat && ImGui::TreeNode("Material Editor")) {
-		this->h1.mat->invokeGuiOptions();
+		r |= this->h1.mat->invokeGuiOptions();
 		ImGui::TreePop();
 		ImGui::Separator();
 	}
 	if (this->h1.tex && ImGui::TreeNode("Texture Editor")) {
-		this->h1.tex->invokeGuiOptions();
+		r |= this->h1.tex->invokeGuiOptions();
 		ImGui::TreePop();
 		ImGui::Separator();
 	}
+	return r;
 }
 
 
@@ -350,32 +347,38 @@ const Interactable* Scene::interacts(const Ray& r, Hit& h, float tmin, float tma
 	}
 	return ret;
 }
-void Scene::invokeGuiOptions() {
+bool Scene::invokeGuiOptions() {
+	bool r = ImGui::ColorEdit3("Sky Color", glm::value_ptr(this->sky_color));
 	size_t i = 0;
 	for (std::shared_ptr<Interactable>& obj : this->objects) {
 		ImGui::PushID(i);
 		if (ImGui::CollapsingHeader(("Obj " + std::to_string(i)).c_str())) {
-			obj->invokeGuiOptions();
+			r |= obj->invokeGuiOptions();
 		}
 		ImGui::PopID();
 		i++;
 	}
 	if (ImGui::Button("Add Sphere")) {
 		this->objects.emplace_back(std::make_shared<Sphere>());
+		r = true;
 	} ImGui::SameLine();
 	if (ImGui::Button("Add Triangle")) {
 		this->objects.emplace_back(std::make_shared<Triangle>(
 			glm::vec3{ 0, 0, 0 }, glm::vec3{ 0, 1, 0 }, glm::vec3{ 1, 1, 0 }
 		));
+		r = true;
 	} ImGui::SameLine();
 	if (ImGui::Button("Add Quad")) {
 		this->objects.emplace_back(std::make_shared<Quad>(
 			glm::vec3{ 0, 0, 0 }, glm::vec3{ 0, 1, 0 }, glm::vec3{ 1, 1, 0 }, glm::vec3{ 1, 0, 0 }
 		));
+		r = true;
 	}
+	return r;
 }
 
-void MaterialManager::invokeGui() {
+bool MaterialManager::invokeGui() {
+	bool r = false;
 	for (size_t i = 0; i < this->materials.size(); i++) {
 		std::unique_ptr<Material>& mat = this->materials[i];
 		ImGui::PushID(i);
@@ -386,10 +389,11 @@ void MaterialManager::invokeGui() {
 				ImGui::Text("Drag to Object to Apply");
 				ImGui::EndDragDropSource();
 			}
-			mat->invokeGuiOptions();
+			r |= mat->invokeGuiOptions();
 			if (ImGui::Button("Delete")) {
 				//this->materials.erase(this->materials.begin() + i);
 				//i--;
+				//r = true;
 			}
 		} else if (ImGui::BeginDragDropSource()) {
 			Material* m = mat.get();
@@ -402,9 +406,12 @@ void MaterialManager::invokeGui() {
 	}
 	if (ImGui::Button("Add PhysicalBase")) {
 		this->materials.emplace_back(std::make_unique<PhysicalBase>());
+		r = true;
 	}
+	return r;
 }
-void TextureManager::invokeGui() {
+bool TextureManager::invokeGui() {
+	bool r = false;
 	for (size_t i = 0; i < this->textures.size(); i++) {
 		std::unique_ptr<Texture>& tex = this->textures[i];
 		ImGui::PushID(i);
@@ -415,10 +422,11 @@ void TextureManager::invokeGui() {
 				ImGui::Text("Drag to Object to Apply");
 				ImGui::EndDragDropSource();
 			}
-			tex->invokeGuiOptions();
+			r |= tex->invokeGuiOptions();
 			if (ImGui::Button("Delete")) {
 				//this->textures.erase(this->textures.begin() + i);
 				//i--;
+				//r = true;
 			}
 		} else if (ImGui::BeginDragDropSource()) {
 			Texture* t = tex.get();
@@ -430,9 +438,12 @@ void TextureManager::invokeGui() {
 	}
 	if (ImGui::Button("Add Staticly Colored Texture")) {
 		this->textures.emplace_back(std::make_unique<StaticColor>());
+		r = true;
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Add Image Texture")) {
 		this->textures.emplace_back(std::make_unique<ImageTexture>());
+		r = true;
 	}
+	return r;
 }

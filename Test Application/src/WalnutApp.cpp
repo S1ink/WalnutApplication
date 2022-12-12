@@ -23,88 +23,48 @@ public:
 
 	virtual void OnUpdate(float ts) override {
 		if (this->camera.OnUpdate(ts)) {
-			this->renderer.resetAccumulatedFrames();
-			//this->renderer.updateRandomRays(this->camera);
+			//this->renderer.resetRender();
+			this->renderer.resetAccumulation();
 		}
 	}
 	virtual void OnUIRender() override {
 
 		using hrc = std::chrono::high_resolution_clock;
 		static hrc::time_point ref = hrc::now();
+		bool needs_reset = false;
 		
-		ImGui::Begin("Options"); {
+	// Render settings window
+		ImGui::Begin("Render Options"); {
 			ImGui::Text("FPS: %.3f", 1e9 / (hrc::now() - ref).count());
 			ref = hrc::now();
+			if (ImGui::Button(this->pause ? "Unpause Render" : "Pause Render")) { this->pause = !this->pause; }
 			ImGui::SameLine();
-			if (ImGui::Button(this->paused ? "Unpause Render" : "Pause Render")) {
-				this->paused = !this->paused;
-			}
-			ImGui::SameLine();
-			if (ImGui::Button(this->desync_render ? "Sync Rendering" : "Desync Rendering")) {
-				if (this->desync_render = !this->desync_render) {
-					this->rendt = std::move(std::thread([this]() {
-						while (this->desync_render) {
-							if (this->paused) {
-								std::this_thread::sleep_for(std::chrono::milliseconds(100));
-							} else {
-								this->renderer.resize(this->frame_width, this->frame_height);
-								this->camera.OnResize(this->frame_width, this->frame_height);
-								if (this->unshaded) {
-									this->renderer.renderUnshaded(this->scene, this->camera);
-								}
-								else {
-									this->renderer.render(this->scene, this->camera);
-								}
-							}
-						}
-					}));
-				} else {
-					this->rendt.join();
-				}
-			}
-			ImGui::SameLine();
-			if (ImGui::Button(this->unshaded ? "Enable RT" : "Disable RT")) {
-				this->unshaded = !this->unshaded;
-			}
-			ImGui::Checkbox("Accumulate Samples", &this->renderer.accumulate);
-			ImGui::SameLine();
-			if (ImGui::Button("Reset Accumulation")) {
-				this->renderer.resetAccumulatedFrames();
-			}
+			if (ImGui::Button("Restart Render")) { needs_reset = true; }
 			ImGui::Separator();
-			ImGui::ColorEdit3("Sky Color", glm::value_ptr(this->scene.sky_color));
-			if (ImGui::DragInt("Bounce Limit", &Renderer::MAX_BOUNCES, 1.f, 1, 100) && Renderer::MAX_BOUNCES < 1) { Renderer::MAX_BOUNCES = 1; }
-			if (ImGui::DragInt("Samples", &Renderer::SAMPLE_RAYS, 1.f, 1, 100) && Renderer::SAMPLE_RAYS < 1) { Renderer::SAMPLE_RAYS = 1; }		
-
+			needs_reset |= this->renderer.invokeGuiOptions();
 		} ImGui::End();
+	// Call Scene and property editor windows
 		ImGui::Begin("Scene"); {
-			this->scene.invokeGuiOptions();
+			needs_reset |= this->scene.invokeGuiOptions();
 		} ImGui::End();
 		ImGui::Begin("Materials"); {
-			/*ImGui::PushID("default_mat");
-			if (ImGui::CollapsingHeader("Default Material")) {
-				PhysicalBase::DEFAULT->invokeGuiOptions();
-			}
-			ImGui::PopID();*/
-			/*ImGui::PushID("light_mat");
-			if (ImGui::CollapsingHeader("Light Source Material")) {
-				PhysicalBase::LIGHT->invokeGuiOptions();
-			}
-			ImGui::PopID();*/
 			this->mats.invokeGui();
 		} ImGui::End();
 		ImGui::Begin("Textures"); {
 			this->texts.invokeGui();
 		} ImGui::End();
-
+	// Display the render
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 		ImGui::Begin("Render"); {
 			this->frame_width = ImGui::GetContentRegionAvail().x;
 			this->frame_height = ImGui::GetContentRegionAvail().y;
 
 			if (this->frame_width * this->frame_height > 0) {
-				if (!this->paused) {
-					this->frame = this->render();
+				if (!this->pause) {
+					if (needs_reset || (frame && (this->frame_width != this->frame->GetWidth() || this->frame_height != this->frame->GetHeight()))) {	// if the scene changed or the window size changed
+						this->renderer.resetRender();
+					}
+					this->frame = this->renderer.getOutput();
 				}
 				if (frame) {
 					ImGui::Image(frame->GetDescriptorSet(), { (float)frame->GetWidth(), (float)frame->GetHeight() }, ImVec2(0, 1), ImVec2(1, 0));
@@ -114,20 +74,32 @@ public:
 		ImGui::PopStyleVar();
 
 	}
+	virtual void OnAttach() override {
+		this->render_thread = std::thread(&RenderLayer::renderLoop, this);
+	}
+	virtual void OnDetach() override {
+		this->exit = true;
+		this->render_thread.join();
+	}
+
+
 protected:
-	std::shared_ptr<Walnut::Image> render() {
-		if (!this->desync_render) {
-			if (this->renderer.resize(this->frame_width, this->frame_height)) {
-				this->camera.OnResize(this->frame_width, this->frame_height);
-				//this->renderer.updateRandomRays(this->camera);
-			}
-			if (this->unshaded) {
-				this->renderer.renderUnshaded(this->scene, this->camera);
+	void renderLoop() {
+		while (this->frame_width == 0 || this->frame_height == 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));	// wait until window has been initialized
+		}
+		this->camera.OnResize(this->frame_width, this->frame_height, this->renderer.properties.aa_random_rays);
+		this->renderer.resize(this->frame_width, this->frame_height);
+		while (!this->exit) {
+			if (this->pause) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			} else {
+				this->camera.OnResize(this->frame_width, this->frame_height);
+				this->renderer.resize(this->frame_width, this->frame_height);
 				this->renderer.render(this->scene, this->camera);
 			}
 		}
-		return this->renderer.getOutput();
+		this->exit = false;
 	}
 
 private:
@@ -136,13 +108,14 @@ private:
 	Scene scene;
 	MaterialManager mats;
 	TextureManager texts;
-	uint32_t frame_width = 0, frame_height = 0;
-	std::thread rendt;
-	
+
 	std::shared_ptr<Walnut::Image> frame;
+	uint32_t frame_width = 0, frame_height = 0;
+
+	std::thread render_thread;
+	std::atomic_bool pause{ false }, exit{ false };
 
 	float ltime = 0.f;
-	bool paused{ false }, desync_render{ false }, unshaded{ false };
 
 
 };
@@ -168,7 +141,8 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 			ImGui::MenuItem("Demo", NULL, &demo);
 			ImGui::EndMenu();
 		}
-		if (demo) {
+		if (demo)
+		{
 			ImGui::ShowDemoWindow(&demo);
 		}
 	});
