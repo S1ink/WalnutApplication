@@ -1,4 +1,4 @@
-#include "Renderer.h"
+#include "Render.h"
 
 #include <execution>
 #include <iterator>
@@ -97,14 +97,14 @@ bool Renderer::invokeGuiOptions() {
 	bool r = false;
 	r |= ImGui::CheckboxFlags("Enable VSync", &p.render_flags, RenderMode_Sync_Frame);
 	r |= ImGui::CheckboxFlags("Accumulate Frames", &p.render_flags, RenderMode_Accumulate);
-	r |= ImGui::CheckboxFlags("Enable AA", &p.render_flags, RenderMode_AA_Random);
+	r |= ImGui::CheckboxFlags("Enable MultiSampled AA", &p.render_flags, RenderMode_MultiSample_AA);
 	r |= ImGui::CheckboxFlags("Parallelize Rendering", &p.render_flags, RenderMode_Parallelize);
 	r |= ImGui::CheckboxFlags("Render Unshaded", &p.render_flags, RenderMode_Unshaded);
-	r |= ImGui::CheckboxFlags("MultiSample Recursively", &p.render_flags, RenderMode_Recursive_Samples);
+	r |= ImGui::CheckboxFlags("Enable Recursive MultiSample", &p.render_flags, RenderMode_Recursive_Samples);
 	r |= ImGui::DragInt("Max Bounces", &p.bounce_limit, 1.f, 1, 20, "%d", ImGuiSliderFlags_AlwaysClamp);
-	r |= ImGui::DragInt("Samples per Pixel", &p.pixel_samples, 1.f, 1, 500, "%d", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+	r |= ImGui::DragInt("Total Pixel Samples", &p.pixel_samples, 1.f, 1, 500, "%d", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
 	r |= ImGui::DragInt("Recursive Samples", &p.recursive_samples, 1.f, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
-	r |= ImGui::DragInt("AA Random Rays", &p.aa_random_rays, 1.f, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
+	r |= ImGui::DragInt("AntiAlias Samples", &p.antialias_samples, 1.f, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
 	if (ImGui::Button("Reset Options")) {
 		this->properties = Properties{};
 		r = true;

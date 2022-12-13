@@ -16,6 +16,19 @@
 #include "Scene.h"
 
 
+struct RenderIO {
+	bool update(uint32_t w, uint32_t h);
+
+	std::shared_ptr<glm::vec3> camera_rays;
+	std::shared_ptr<Walnut::Image> shared_frame;
+
+	uint32_t* buffer{ nullptr };
+	glm::vec3* accumulation{ nullptr };
+	
+	uint32_t accumulated{ 1 },
+		width{ 0 }, height{ 0 }, ray_depth{ 1 };
+};
+
 class Renderer {
 	struct Properties;
 public:
@@ -45,7 +58,7 @@ public:
 //		RenderMode_Raw = 0,
 		RenderMode_Sync_Frame = 1 << 0,
 		RenderMode_Accumulate = 1 << 1,
-		RenderMode_AA_Random = 1 << 2,
+		RenderMode_MultiSample_AA = 1 << 2,
 		RenderMode_Parallelize = 1 << 3,
 		RenderMode_Unshaded = 1 << 4,
 		RenderMode_Recursive_Samples = 1 << 5
@@ -55,15 +68,15 @@ public:
 			render_flags{ RenderMode_Accumulate },
 			bounce_limit{ 5U },
 			pixel_samples{ 5U },
-			aa_random_rays{ 3U },
-			recursive_samples{ 3U }/*,
+			recursive_samples{ 3U },
+			antialias_samples{ 3U }/*,
 			cpu_threads{ std::thread::hardware_concurrency() * 0.75f }*/;
 	} properties;
 
 	static glm::vec3 evaluateRayAlbedo(const Scene&, const Ray&);	// for rendering without shading
 	static glm::vec3 evaluateRay(const Scene&, const Ray&, size_t = 1);		// trace the ray through the scene for x number of bounces
 	static glm::vec3 recursivelySampleRay(const Scene&, const Ray&, size_t, size_t = 1);	// samples at each redirect (much more complex, but much more visually robust)
-
+																	// ^ how many recursive samples
 
 private:
 	std::shared_ptr<Walnut::Image> image;

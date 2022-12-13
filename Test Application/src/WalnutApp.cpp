@@ -9,7 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "Renderer.h"
+#include "Render.h"
 #include "Camera.h"
 #include "Scene.h"
 #include "Objects.h"
@@ -22,10 +22,8 @@ public:
 
 
 	virtual void OnUpdate(float ts) override {
-		if (this->camera.OnUpdate(ts)) {
-			//this->renderer.resetRender();
-			this->renderer.resetAccumulation();
-		}
+		static bool cam_updated;
+		cam_updated |= this->camera.OnUpdate(ts);
 	}
 	virtual void OnUIRender() override {
 
@@ -88,7 +86,7 @@ protected:
 		while (this->frame_width == 0 || this->frame_height == 0) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));	// wait until window has been initialized
 		}
-		this->camera.OnResize(this->frame_width, this->frame_height, this->renderer.properties.aa_random_rays);
+		this->camera.OnResize(this->frame_width, this->frame_height, this->renderer.properties.antialias_samples);
 		this->renderer.resize(this->frame_width, this->frame_height);
 		while (!this->exit) {
 			if (this->pause) {

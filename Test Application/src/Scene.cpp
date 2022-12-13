@@ -16,10 +16,12 @@ const std::unique_ptr<Texture>
 
 
 bool PhysicalBase::invokeGuiOptions() {
-	return ImGui::DragFloat("Roughness", &this->roughness, 0.005, 0.f, 1.f)
-		|| ImGui::DragFloat("Glossiness", &this->glossiness, 0.005, 0.f, 1.f)
-		|| ImGui::DragFloat("Transparency", &this->transparency, 0.005, 0.f, 1.f)
-		|| ImGui::DragFloat("Refraction Index", &this->refraction_index, 0.005, 0.5, 10.f);
+	bool r = false;
+	r |= ImGui::DragFloat("Roughness", &this->roughness, 0.005, 0.f, 1.f);
+	r |= ImGui::DragFloat("Glossiness", &this->glossiness, 0.005, 0.f, 1.f);
+	r |= ImGui::DragFloat("Transparency", &this->transparency, 0.005, 0.f, 1.f);
+	r |= ImGui::DragFloat("Refraction Index", &this->refraction_index, 0.005, 0.5, 10.f);
+	return r;
 }
 
 bool PhysicalBase::redirect(const Ray& src, const Hit& hit, Ray& out) const {
