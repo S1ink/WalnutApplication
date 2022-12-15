@@ -35,6 +35,7 @@ private:
 struct CameraView {
 	bool UpdateView(const Camera& c);
 	bool UpdateProjection(const Camera& c, uint32_t w = 0, uint32_t h = 0);
+	bool GenerateDirections(glm::vec3* r, uint32_t d = 1, uint32_t w = 0, uint32_t h = 0);
 
 	uint32_t
 		m_ViewWidth{ 0 }, m_ViewHeight{ 0 };

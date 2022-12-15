@@ -4,7 +4,7 @@
 #include <array>
 #include <vector>
 #include <thread>
-#include <mutex>
+#include <shared_mutex>
 #include <atomic>
 //#include <shared_mutex>
 
@@ -16,17 +16,13 @@
 #include "Scene.h"
 
 
-struct RenderIO {
-	bool update(uint32_t w, uint32_t h);
+struct RenderStack {
+	glm::vec3* directions{ nullptr };	// for size width * height * depth + 1, the first vec3 is the cam origin
+	glm::vec4* accum_ratio{ nullptr };	// vec3 for accum color, extra float for dividend
+	uint32_t* buffer{ nullptr };	// output pixel buffer
 
-	std::shared_ptr<glm::vec3> camera_rays;
-	std::shared_ptr<Walnut::Image> shared_frame;
-
-	uint32_t* buffer{ nullptr };
-	glm::vec3* accumulation{ nullptr };
-	
-	uint32_t accumulated{ 1 },
-		width{ 0 }, height{ 0 }, ray_depth{ 1 };
+	uint32_t width{ 0 }, height{ 0 }, depth{ 0 };	// dimensions of buffers
+	std::shared_mutex move_lock, resize_lock;	// mutex for camera move (only reallocs rays) and mutex for resize (reallocs everything)
 };
 
 class Renderer {
@@ -35,25 +31,33 @@ public:
 	Renderer() = default;
 	Renderer(const Properties& p) : properties(p) {}
 
-	bool resize(uint32_t, uint32_t);
-	void render(const Scene&, const Camera&);
+	void render(const Scene&, RenderStack&);
 
-	std::shared_ptr<Walnut::Image> getOutput() const;
+	//std::shared_ptr<Walnut::Image> getOutput() const;
 	//std::shared_ptr<Walnut::Image> getImmediateOutput() const;
 
 	bool invokeGuiOptions();
 
-	inline void resetRender() {
+	inline void pauseRender() { this->render_state = RenderState_Pause; }
+	inline void resumeRender() { this->render_state = RenderState_Render; }
+	inline void cancelRender() { this->render_state = RenderState_Cancel; }
+
+	/*inline void resetRender() {
 		this->render_interrupt = true;
 		this->accumulated_frames = 1;
 	}
 	inline void resetAccumulation() {
 		this->accumulated_frames = 1;
-	}
+	}*/
 
 	//inline void resetAccumulatedFrames() { this->accumulated_frames = 1; }
 	//inline void updateRandomRays(const Camera& c) { c.CalculateRandomDirections(this->aa_rays); }
 
+	enum {
+		RenderState_Render = 0,
+		RenderState_Cancel = 1,
+		RenderState_Pause = 2
+	};
 	enum {
 //		RenderMode_Raw = 0,
 		RenderMode_Sync_Frame = 1 << 0,
@@ -77,20 +81,8 @@ public:
 	static glm::vec3 evaluateRay(const Scene&, const Ray&, size_t = 1);		// trace the ray through the scene for x number of bounces
 	static glm::vec3 recursivelySampleRay(const Scene&, const Ray&, size_t, size_t = 1);	// samples at each redirect (much more complex, but much more visually robust)
 																	// ^ how many recursive samples
-
 private:
-	std::shared_ptr<Walnut::Image> image;
-
-	//std::vector<std::vector<glm::vec3>> aa_rays;	// randomized directions for antialiasing samples
-
-	mutable std::mutex buffer_read_lock, buffer_write_lock, frame_lock;
-	//std::shared_mutex buffer_write_lock;
-	std::atomic_bool render_interrupt{ false };
-
-	uint32_t* buffer = nullptr;
-	glm::vec3* accumulated_samples = nullptr;
-	
-	uint32_t accumulated_frames = 1;
+	std::atomic_int render_state{ RenderState_Render };
 
 
 };

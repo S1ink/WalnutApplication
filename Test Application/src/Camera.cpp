@@ -150,46 +150,33 @@ bool CameraView::UpdateProjection(const Camera& c, uint32_t w, uint32_t h)
 	c.CalcProjection({ w, h }, &m_InverseProjection);
 	return true;
 }
+bool CameraView::GenerateDirections(glm::vec3* rays, uint32_t d, uint32_t w, uint32_t h)
+{
+	if (
+		(w != m_ViewWidth && w != 0) ||
+		(h != m_ViewHeight && h != 0) ||
+		d < 1
+	) return false;
 
+	float rx = 0.f, ry = 0.f;
+	for (size_t i = 0; i < d; i++)
+	{
+		if (i != 0)
+		{
+			rx = Random::Float();
+			ry = Random::Float();
+		}
+		for (uint32_t y = 0; y < h; y++)
+		{
+			for (uint32_t x = 0; x < w; x++)
+			{
+				glm::vec2 coord = { (x + rx) / (float)w, (y + ry) / (float)h };
+				coord = coord * 2.0f - 1.0f; // -1 -> 1
 
-//void Camera::RecalculateRayDirections()
-//{
-//	m_RayAccess.lock();
-//	m_AA_RayAccess.lock();
-//
-//	std::cout << "Calculating Ray Directions..." << std::endl;
-//
-//	m_RayDirections.resize(m_ArrayDepth);
-//	float rx = 0.f, ry = 0.f;
-//
-//	if (m_ArrayDepth == 0)	// theoretically pointless but still good to have
-//		m_RayAccess.unlock();
-//	for (size_t r = 0; r < m_ArrayDepth; r++)
-//	{
-//		m_RayDirections[r].resize(m_ViewportWidth * m_ViewportHeight);
-//		if (r != 0)
-//		{
-//			rx = Random::Float();
-//			ry = Random::Float();
-//		}
-//
-//		for (uint32_t y = 0; y < m_ViewportHeight; y++)
-//		{
-//			for (uint32_t x = 0; x < m_ViewportWidth; x++)
-//			{
-//				glm::vec2 coord = { (x + rx) / (float)m_ViewportWidth, (y + ry) / (float)m_ViewportHeight };
-//				coord = coord * 2.0f - 1.0f; // -1 -> 1
-//
-//				glm::vec4 target = m_InverseProjection * glm::vec4(coord.x, coord.y, 1, 1);
-//				m_RayDirections[r][x + y * m_ViewportWidth] =
-//					glm::vec3(m_InverseView * glm::vec4(glm::normalize(glm::vec3(target) / target.w), 0)); // World space
-//			}
-//		}
-//
-//		std::cout << "Calculated Ray Directions for array " << r << std::endl;
-//
-//		if (r == 0)
-//			m_RayAccess.unlock();
-//	}
-//	m_AA_RayAccess.unlock();
-//}
+				glm::vec4 target = m_InverseProjection * glm::vec4(coord.x, coord.y, 1, 1);
+				rays[d * (y * w + x) + i] =
+					glm::vec3(m_InverseView * glm::vec4(glm::normalize(glm::vec3(target) / target.w), 0)); // World space
+			}
+		}
+	}
+}

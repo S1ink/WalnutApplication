@@ -33,51 +33,51 @@ glm::vec4 rgba2vec(uint32_t* c) {
 	};
 }
 
-bool Renderer::resize(uint32_t w, uint32_t h) {
-
-	this->render_interrupt = true;
-	
-	this->buffer_read_lock.lock();	// disallow both reading and writing while reallocating buffers
-	this->buffer_write_lock.lock();
-
-	if (this->image) {
-		if (this->image->GetWidth() == w && this->image->GetHeight() == h) {
-			this->buffer_read_lock.unlock();
-			this->buffer_write_lock.unlock();
-			return false;
-		}
-		this->image->Resize(w, h);
-	}
-	else {
-		this->image = std::make_shared<Walnut::Image>(w, h, Walnut::ImageFormat::RGBA);
-	}
-
-	delete[] this->buffer;
-	this->buffer = new uint32_t[w * h];
-	delete[] this->accumulated_samples;
-	this->accumulated_samples = new glm::vec3[w * h];
-	this->accumulated_frames = 1;
-
-	this->buffer_read_lock.unlock();
-	this->buffer_write_lock.unlock();
-
-	return true;
-
-}
-std::shared_ptr<Walnut::Image> Renderer::getOutput() const {
-	
-	if (this->properties.render_flags & RenderMode_Sync_Frame) {
-		std::scoped_lock l(this->frame_lock);	// blocks until frame is not being written to
-		return this->image;
-	}
-	if (this->buffer) {
-		this->buffer_read_lock.lock();
-		this->image->SetData(this->buffer);
-		this->buffer_read_lock.unlock();
-	}
-	return this->image;
-
-}
+//bool Renderer::resize(uint32_t w, uint32_t h) {
+//
+//	this->render_interrupt = true;
+//	
+//	this->buffer_read_lock.lock();	// disallow both reading and writing while reallocating buffers
+//	this->buffer_write_lock.lock();
+//
+//	if (this->image) {
+//		if (this->image->GetWidth() == w && this->image->GetHeight() == h) {
+//			this->buffer_read_lock.unlock();
+//			this->buffer_write_lock.unlock();
+//			return false;
+//		}
+//		this->image->Resize(w, h);
+//	}
+//	else {
+//		this->image = std::make_shared<Walnut::Image>(w, h, Walnut::ImageFormat::RGBA);
+//	}
+//
+//	delete[] this->buffer;
+//	this->buffer = new uint32_t[w * h];
+//	delete[] this->accumulated_samples;
+//	this->accumulated_samples = new glm::vec3[w * h];
+//	this->accumulated_frames = 1;
+//
+//	this->buffer_read_lock.unlock();
+//	this->buffer_write_lock.unlock();
+//
+//	return true;
+//
+//}
+//std::shared_ptr<Walnut::Image> Renderer::getOutput() const {
+//	
+//	if (this->properties.render_flags & RenderMode_Sync_Frame) {
+//		std::scoped_lock l(this->frame_lock);	// blocks until frame is not being written to
+//		return this->image;
+//	}
+//	if (this->buffer) {
+//		this->buffer_read_lock.lock();
+//		this->image->SetData(this->buffer);
+//		this->buffer_read_lock.unlock();
+//	}
+//	return this->image;
+//
+//}
 //std::shared_ptr<Walnut::Image> Renderer::getImmediateOutput() const {
 //	
 //	if (this->sync_lock.try_lock()) {
@@ -142,35 +142,66 @@ private:
 };
 
 
-void Renderer::render(const Scene& scene, const Camera& cam) {
+void Renderer::render(const Scene& scene, RenderStack& stack) {
 
-	this->render_interrupt = false;
+	this->render_state = RenderState_Render;
 	int32_t flags_cache = this->properties.render_flags;
-	Camera::ScopedRayAccess ray_access = cam.AccessRayDirections();
-	auto& rays = ray_access.GetRayDirections();
 
-	this->buffer_write_lock.lock();
 	if (flags_cache & RenderMode_Parallelize) {
 		/*std::cout << cam.GetRayDirections().size() << std::endl;*/
-		std::for_each(std::execution::par, IndexIterator(0), IndexIterator(this->image->GetHeight()),
-			[&scene, &cam, rays, &flags_cache, this](int64_t idx) {		// for each row...
+		std::for_each(std::execution::par, IndexIterator(0), IndexIterator(stack.height),
+			[&scene, &stack, &flags_cache, this](int64_t idx) {		// for each row...
 				glm::vec3 clr;
-				const int64_t end = this->image->GetWidth() * (idx + 1);
-				for (idx *= this->image->GetWidth(); idx < end; idx++) {	// for each pixel in the row...
-					if (this->render_interrupt) {
+				const int64_t end = stack.width * (idx + 1);
+				for (idx *= stack.width; idx < end; idx++) {	// for each pixel in the row...
+					while (this->render_state == RenderState_Pause) {
+						std::this_thread::sleep_for(std::chrono::milliseconds(10));
+					}
+					if (this->render_state == RenderState_Cancel) {
 						return;
 					}
-					Ray ray{
-						cam.GetPosition(),
-						rays[idx]
-					};
+					stack.move_lock.lock_shared();
+					stack.resize_lock.lock_shared();
+					/*int offset = 0;
+					if (flags_cache & RenderMode_MultiSample_AA) {
+						offset = (int)stack.accum_ratio[idx][3] % stack.depth;
+					}*/
+					Ray ray;
+					ray.origin = stack.directions[0];
 					clr = glm::vec3{ 0.f };
 					if (flags_cache & RenderMode_Unshaded) {	// do this comparison outside the loop
+						ray.direction = stack.directions[idx * stack.depth + 1];
 						clr = evaluateRayAlbedo(scene, ray);
 					}
 					else {
-						if (flags_cache & RenderMode_Recursive_Samples) {
+						bool recursive = flags_cache & RenderMode_Recursive_Samples,
+							accumulate = flags_cache & RenderMode_Accumulate,
+							multisample = flags_cache & RenderMode_MultiSample_AA;
+
+						if (recursive) {
+							if (multisample) {
+								for (size_t s = 0; s < this->properties.antialias_samples; s++) {
+									clr += recursivelySampleRay(scene, ray, this->properties.recursive_samples, this->properties.bounce_limit);
+								}
+							}
 							clr = recursivelySampleRay(scene, ray, this->properties.recursive_samples, this->properties.bounce_limit);
+						} else {
+							for (size_t s = 0; s < this->properties.pixel_samples; s++) {
+								clr += evaluateRay(scene, ray, this->properties.bounce_limit);
+							}
+						}
+
+						if (recursive) {
+							if (multisample) {
+								if (accumulate) {
+
+								}
+							}
+							if (accumulate) {
+								*(glm::vec3*)(stack.accum_ratio + idx) += 
+									recursivelySampleRay(scene, ray, this->properties.recursive_samples, this->properties.bounce_limit);
+								stack.accum_ratio[idx][3] += 1.f;
+							}
 						}
 						else {
 							for (size_t s = 0; s < this->properties.pixel_samples; s++) {
@@ -187,7 +218,9 @@ void Renderer::render(const Scene& scene, const Camera& cam) {
 							clr /= this->accumulated_frames;
 						}
 					}
-					this->buffer[idx] = vec2rgba(glm::sqrt(clr), 1.f);
+					stack.buffer[idx] = vec2rgba(glm::sqrt(clr), 1.f);
+					stack.move_lock.unlock_shared();
+					stack.resize_lock.unlock_shared();
 				}
 			}
 		);

@@ -218,7 +218,7 @@ public:
 };
 
 /* TODO:
-* Add Cube / Rect Prism (Rect3D)
+* Add Cube/Rect Prism (Rect3D)
 * Add Size/Rotation wrappers for triangle/quad/^^^
 * Improve tri/quad/^^^ GUI options for pos/rotation/size
 */
