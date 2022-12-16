@@ -64,34 +64,6 @@ glm::vec4 rgba2vec(uint32_t* c) {
 //	return true;
 //
 //}
-//std::shared_ptr<Walnut::Image> Renderer::getOutput() const {
-//	
-//	if (this->properties.render_flags & RenderMode_Sync_Frame) {
-//		std::scoped_lock l(this->frame_lock);	// blocks until frame is not being written to
-//		return this->image;
-//	}
-//	if (this->buffer) {
-//		this->buffer_read_lock.lock();
-//		this->image->SetData(this->buffer);
-//		this->buffer_read_lock.unlock();
-//	}
-//	return this->image;
-//
-//}
-//std::shared_ptr<Walnut::Image> Renderer::getImmediateOutput() const {
-//	
-//	if (this->sync_lock.try_lock()) {
-//		if (this->buffer_read_lock.try_lock()) {
-//			if (this->buffer) {
-//				this->image->SetData(this->buffer);	// only sets data if able to read buffer and frame is synced
-//			}
-//			this->buffer_read_lock.unlock();
-//		}
-//		this->sync_lock.unlock();
-//	}
-//	return this->image;
-//
-//}
 bool Renderer::invokeGuiOptions() {
 	Properties& p = this->properties;
 	bool r = false;
@@ -148,7 +120,6 @@ void Renderer::render(const Scene& scene, RenderStack& stack) {
 	int32_t flags_cache = this->properties.render_flags;
 
 	if (flags_cache & RenderMode_Parallelize) {
-		/*std::cout << cam.GetRayDirections().size() << std::endl;*/
 		std::for_each(std::execution::par, IndexIterator(0), IndexIterator(stack.height),
 			[&scene, &stack, &flags_cache, this](int64_t idx) {		// for each row...
 				glm::vec3 clr;
@@ -162,61 +133,31 @@ void Renderer::render(const Scene& scene, RenderStack& stack) {
 					}
 					stack.move_lock.lock_shared();
 					stack.resize_lock.lock_shared();
-					/*int offset = 0;
-					if (flags_cache & RenderMode_MultiSample_AA) {
-						offset = (int)stack.accum_ratio[idx][3] % stack.depth;
-					}*/
-					Ray ray;
-					ray.origin = stack.directions[0];
+					Ray ray{
+						stack.directions[0],
+						stack.directions[idx * stack.depth + 1]
+					};
 					clr = glm::vec3{ 0.f };
 					if (flags_cache & RenderMode_Unshaded) {	// do this comparison outside the loop
-						ray.direction = stack.directions[idx * stack.depth + 1];
 						clr = evaluateRayAlbedo(scene, ray);
-					}
-					else {
-						bool recursive = flags_cache & RenderMode_Recursive_Samples,
-							accumulate = flags_cache & RenderMode_Accumulate,
-							multisample = flags_cache & RenderMode_MultiSample_AA;
-
-						if (recursive) {
-							if (multisample) {
-								for (size_t s = 0; s < this->properties.antialias_samples; s++) {
-									clr += recursivelySampleRay(scene, ray, this->properties.recursive_samples, this->properties.bounce_limit);
-								}
+					} else {
+						if (flags_cache & RenderMode_Recursive_Samples) {
+							for (size_t s = 0; s < this->properties.pixel_samples; s++) {
+								clr += recursivelySampleRay(scene, ray, this->properties.pixel_samples, this->properties.bounce_limit);
 							}
-							clr = recursivelySampleRay(scene, ray, this->properties.recursive_samples, this->properties.bounce_limit);
 						} else {
 							for (size_t s = 0; s < this->properties.pixel_samples; s++) {
 								clr += evaluateRay(scene, ray, this->properties.bounce_limit);
 							}
 						}
-
-						if (recursive) {
-							if (multisample) {
-								if (accumulate) {
-
-								}
-							}
-							if (accumulate) {
-								*(glm::vec3*)(stack.accum_ratio + idx) += 
-									recursivelySampleRay(scene, ray, this->properties.recursive_samples, this->properties.bounce_limit);
-								stack.accum_ratio[idx][3] += 1.f;
-							}
-						}
-						else {
-							for (size_t s = 0; s < this->properties.pixel_samples; s++) {
-								clr += evaluateRay(scene, ray, this->properties.bounce_limit);
-							}
+						if (flags_cache & RenderMode_Accumulate) {
+							*((glm::vec3*)(stack.accum_ratio + idx)) += clr;
+							stack.accum_ratio[idx][3] += this->properties.pixel_samples;
+							clr = glm::vec3(stack.accum_ratio[idx]) /= stack.accum_ratio[idx][3];
+						} else {
 							clr /= this->properties.pixel_samples;
 						}
 						clr = glm::clamp(clr, 0.f, 1.f);
-						if (this->accumulated_frames == 1) {
-							this->accumulated_samples[idx] = clr;
-						}
-						else {
-							clr = (this->accumulated_samples[idx] += clr);
-							clr /= this->accumulated_frames;
-						}
 					}
 					stack.buffer[idx] = vec2rgba(glm::sqrt(clr), 1.f);
 					stack.move_lock.unlock_shared();
@@ -225,14 +166,19 @@ void Renderer::render(const Scene& scene, RenderStack& stack) {
 			}
 		);
 	} else {
-		uint32_t sz = this->image->GetWidth() * this->image->GetHeight();
+		uint32_t sz = stack.width * stack.height;
 		for (uint32_t n = 0; n < sz; n++) {
-			if (this->render_interrupt) {
+			while (this->render_state == RenderState_Pause) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			}
+			if (this->render_state == RenderState_Cancel) {
 				break;
 			}
+			stack.move_lock.lock_shared();
+			stack.resize_lock.lock_shared();
 			Ray ray{
-				cam.GetPosition(),
-				rays[n]
+				stack.directions[0],
+				stack.directions[n * stack.depth + 1]
 			};
 			glm::vec3 clr{ 0.f };
 			if (flags_cache & RenderMode_Unshaded) {	// do this comparison outside the loop
@@ -247,35 +193,22 @@ void Renderer::render(const Scene& scene, RenderStack& stack) {
 						clr += evaluateRay(scene, ray, this->properties.bounce_limit);
 					}
 				}
-				clr /= this->properties.pixel_samples;
-				clr = glm::clamp(clr, 0.f, 1.f);
-				if (this->accumulated_frames == 1) {
-					this->accumulated_samples[n] = clr;
+				if (flags_cache & RenderMode_Accumulate) {
+					*((glm::vec3*)(stack.accum_ratio + n)) += clr;
+					stack.accum_ratio[n][3] += this->properties.pixel_samples;
+					clr = glm::vec3(stack.accum_ratio[n]) /= stack.accum_ratio[n][3];
 				} else {
-					clr = (this->accumulated_samples[n] += clr);
-					clr /= this->accumulated_frames;
+					clr /= this->properties.pixel_samples;
 				}
+				clr = glm::clamp(clr, 0.f, 1.f);
 			}
-			this->buffer[n] = vec2rgba(glm::sqrt(clr), 1.f);
+			stack.move_lock.unlock_shared();
+			stack.buffer[n] = vec2rgba(glm::sqrt(clr), 1.f);
+			stack.resize_lock.unlock_shared();
 		}
 	}
-	this->buffer_write_lock.unlock();
-	if ((flags_cache & RenderMode_Accumulate) && (~flags_cache & RenderMode_Unshaded) && !this->render_interrupt) {
-		this->accumulated_frames++;
-	}
-	if ((flags_cache & RenderMode_Sync_Frame) && !this->render_interrupt) {
-		this->buffer_read_lock.lock();
-		this->frame_lock.lock();
 
-		this->image->SetData(this->buffer);
-		
-		this->buffer_read_lock.unlock();
-		this->frame_lock.unlock();
-	}
-
-	/*if (flags_cache & RenderMode_Sync_Frame) {
-		this->sync_lock.unlock();
-	}*/
+	// frame sync here
 
 }
 

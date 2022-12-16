@@ -1,6 +1,7 @@
 #include <chrono>
 #include <vector>
 #include <thread>
+#include <algorithm>
 
 #include "Walnut/Application.h"
 #include "Walnut/EntryPoint.h"
@@ -20,10 +21,16 @@ class RenderLayer : public Walnut::Layer
 public:
 	RenderLayer() : scene(demo) {}
 
+	enum {
+		Event_None = 0,
+		Event_CameraMoved = 1 << 0,
+		Event_WindowResize = 1 << 1,
+		Event_ParamChange = 1 << 2
+	};
 
 	virtual void OnUpdate(float ts) override {
-		if (this->camera.OnUpdate(ts) && this->can_update) {	// need to store that the camera has changed in case updating is not available until the event is over
-			std::thread(&RenderLayer::updateRayDirections, this).detach();
+		if (this->camera.OnUpdate(ts)) {
+			this->events |= Event_CameraMoved;
 		}
 	}
 	virtual void OnUIRender() override {
@@ -59,25 +66,40 @@ public:
 			this->frame_height = ImGui::GetContentRegionAvail().y;
 
 			if (this->frame_width != this->rstack.width || this->frame_height != this->rstack.height) {
-				if (this->can_update) {	// if not available, store event for next pass
-					std::thread(&RenderLayer::updateBufferSizes, this).detach();
-				}
+				this->events |= Event_WindowResize;
 			}
 			if (!this->pause) {
 				if (needs_reset) {
 					this->renderer.cancelRender();
+					this->rstack.resize_lock.lock_shared();
+					memset(this->rstack.accum_ratio, 0, this->rstack.width * this->rstack.height * sizeof(glm::vec4));
+					this->rstack.resize_lock.unlock_shared();
 				}
-				//this->frame = this->renderer.getOutput();	// currently ???
+				if (this->frame && !(this->renderer.properties.render_flags & Renderer::RenderMode_Sync_Frame)) {
+					this->rstack.resize_lock.lock_shared();	// try lock
+					this->frame->SetData(this->rstack.buffer);
+					this->rstack.resize_lock.unlock_shared();
+				}	// idk what to do for syncing yet...
 			}
-			if (frame) {	// always render frame if valid
+			if (this->frame) {	// always render frame if valid
+				this->rstack.resize_lock.lock_shared();
 				ImGui::Image(
 					frame->GetDescriptorSet(),
 					{ (float)frame->GetWidth(), (float)frame->GetHeight() },
 					ImVec2(0, 1), ImVec2(1, 0)
 				);
+				this->rstack.resize_lock.unlock_shared();
 			}
 		} ImGui::End();
 		ImGui::PopStyleVar();
+
+		if (this->renderer.properties.antialias_samples > this->rstack.depth) {
+			this->events |= Event_ParamChange;
+		}
+		if (this->events && !this->update_running) {
+			std::thread(&RenderLayer::updateBuffers, this, this->events).detach();
+			this->events = Event_None;
+		}
 
 	}
 	virtual void OnAttach() override {
@@ -108,103 +130,57 @@ protected:
 		}
 		this->exit = false;
 	}
-	void updateRayDirectionsDepth() {	// on parameter change --> regenerates ray directions, does not reset accumulation
-		this->can_update = false;
+	void updateBuffers(uint32_t events) {
+		this->update_running = true;
 		uint32_t
 			w = this->frame_width,
 			h = this->frame_height,
-			d = this->renderer.properties.antialias_samples;
+			d = std::max((int)this->renderer.properties.antialias_samples, (int)this->rstack.depth);
 
+		if (events & Event_CameraMoved) {
+			this->viewport.UpdateView(this->camera);
+		}
+		if (events & (Event_CameraMoved | Event_WindowResize)) {
+			this->viewport.UpdateProjection(this->camera, w, h);
+		}
+		// if Event_CameraMoved | Event_WindowResize | Event_ParmChange --> currently all events
 		glm::vec3* temp = new glm::vec3[w * h * d + 1];
 		temp[0] = this->camera.GetPosition();
 		this->viewport.GenerateDirections(temp + 1, d, w, h);
 
-		this->renderer.pauseRender();
-		this->rstack.move_lock.lock();
-		delete[] this->rstack.directions;
-		this->rstack.directions = temp;
-		this->rstack.move_lock.unlock();
-		this->renderer.resumeRender();
-		this->can_update = true;
-	}
-	void updateRayDirections() {	// on camera move --> updates view, regenerates ray directions (updates depth), and resets accumulation
-		this->can_update = false;
-		uint32_t
-			w = this->frame_width,
-			h = this->frame_height,
-			d = this->renderer.properties.antialias_samples;
-		
-		this->viewport.UpdateView(this->camera);	// update view
-		this->viewport.UpdateProjection(this->camera, w, h);	// update projection (only if changed)
-		glm::vec3* temp = new glm::vec3[w * h * d + 1];
-		temp[0] = this->camera.GetPosition();
-		this->viewport.GenerateDirections(temp + 1, d, w, h);
-		
-		this->renderer.pauseRender();
-		this->rstack.move_lock.lock();
-		delete[] this->rstack.directions;
-		this->rstack.directions = temp;
-		memset(this->rstack.accum_ratio, 0, w * h * sizeof(glm::vec4));	// reset accumulation because the camera has moved
-		this->rstack.move_lock.unlock();
-		this->renderer.resumeRender();
-		this->can_update = true;
-	}
-	void updateBufferSizes() {		// on resize --> resets everything
-		this->can_update = false;
-		uint32_t
-			w = this->frame_width,
-			h = this->frame_height,
-			d = this->renderer.properties.antialias_samples;
+		if (events & Event_WindowResize) {
+			this->renderer.cancelRender();
+			this->rstack.move_lock.lock();
+			this->rstack.resize_lock.lock();
+			delete[] this->rstack.directions;
+			delete[] this->rstack.accum_ratio;
+			delete[] this->rstack.buffer;
+			this->rstack.directions = temp;
+			this->rstack.accum_ratio = new glm::vec4[w * h];
+			this->rstack.buffer = new uint32_t[w * h];
+			if (this->frame) {
+				this->frame->Resize(w, h);
+			} else {
+				this->frame = new Walnut::Image(w, h, Walnut::ImageFormat::RGBA);
+			}
+			this->rstack.width = w;
+			this->rstack.height = h;
+			this->rstack.depth = d;
+			this->rstack.move_lock.unlock();
+			this->rstack.resize_lock.unlock();
+		} else {
+			this->renderer.pauseRender();
+			this->rstack.move_lock.lock();
+			delete[] this->rstack.directions;
+			this->rstack.directions = temp;
+			if (events & Event_CameraMoved) {
+				memset(this->rstack.accum_ratio, 0, w * h * sizeof(glm::vec4));	// reset accumulation because the camera has moved
+			}
+			this->rstack.move_lock.unlock();
+			this->renderer.resumeRender();
+		}
 
-		this->viewport.UpdateProjection(this->camera, w, h);
-		glm::vec3* temp = new glm::vec3[w * h * d + 1];
-		temp[0] = this->camera.GetPosition();
-		this->viewport.GenerateDirections(temp + 1, d, w, h);
-
-		this->renderer.cancelRender();
-		this->rstack.move_lock.lock();
-		this->rstack.resize_lock.lock();
-		delete[] this->rstack.directions;
-		delete[] this->rstack.accum_ratio;
-		delete[] this->rstack.buffer;
-		this->rstack.directions = temp;
-		this->rstack.accum_ratio = new glm::vec4[w * h];
-		this->rstack.buffer = new uint32_t[w * h];
-		this->rstack.width = w;
-		this->rstack.height = h;
-		this->rstack.depth = d;
-		this->rstack.move_lock.unlock();
-		this->rstack.resize_lock.unlock();
-		this->can_update = true;
-	}
-	void updateEverything() {	// on camera move and resize --> regens view, regens rays, and regens buffers
-		this->can_update = false;
-		uint32_t
-			w = this->frame_width,
-			h = this->frame_height,
-			d = this->renderer.properties.antialias_samples;
-
-		this->viewport.UpdateView(this->camera);
-		this->viewport.UpdateProjection(this->camera, w, h);
-		glm::vec3* temp = new glm::vec3[w * h * d + 1];
-		temp[0] = this->camera.GetPosition();
-		this->viewport.GenerateDirections(temp + 1, d, w, h);
-
-		this->renderer.cancelRender();
-		this->rstack.move_lock.lock();
-		this->rstack.resize_lock.lock();
-		delete[] this->rstack.directions;
-		delete[] this->rstack.accum_ratio;
-		delete[] this->rstack.buffer;
-		this->rstack.directions = temp;
-		this->rstack.accum_ratio = new glm::vec4[w * h];
-		this->rstack.buffer = new uint32_t[w * h];
-		this->rstack.width = w;
-		this->rstack.height = h;
-		this->rstack.depth = d;
-		this->rstack.move_lock.unlock();
-		this->rstack.resize_lock.unlock();
-		this->can_update = true;
+		this->update_running = false;
 	}
 
 private:
@@ -217,13 +193,14 @@ private:
 	RenderStack rstack;
 	CameraView viewport;
 
-	std::shared_ptr<Walnut::Image> frame;
-	uint32_t frame_width = 0, frame_height = 0;
+	Walnut::Image* frame{ nullptr };
+	uint32_t frame_width{ 0 }, frame_height{ 0 };
 
 	std::thread render_thread;
-	std::atomic_bool pause{ false }, exit{ false }, can_update{ true };
+	std::atomic_bool pause{ false }, exit{ false }, update_running{ false };
 
-	float ltime = 0.f;
+	uint32_t events{ Event_None };
+	float ltime{ 0.f };
 
 
 };

@@ -339,8 +339,8 @@ const Interactable* Scene::interacts(const Ray& r, Hit& h, float tmin, float tma
 	Hit temp;
 	const Interactable* ret = nullptr;
 	h.ptime = tmax;
-	for (const std::shared_ptr<Interactable>& obj : this->objects) {
-		if (const Interactable* i = obj->interacts(r, temp, tmin, h.ptime)) {
+	for (size_t idx = 0; idx < this->objects.size(); idx++) {
+		if (const Interactable* i = this->objects[idx]->interacts(r, temp, tmin, h.ptime)) {
 			h.reverse_intersect = temp.reverse_intersect;
 			h.ptime = temp.ptime;
 			h.normal = temp.normal;

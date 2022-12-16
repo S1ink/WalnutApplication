@@ -32,31 +32,17 @@ public:
 	Renderer(const Properties& p) : properties(p) {}
 
 	void render(const Scene&, RenderStack&);
-
-	//std::shared_ptr<Walnut::Image> getOutput() const;
-	//std::shared_ptr<Walnut::Image> getImmediateOutput() const;
-
 	bool invokeGuiOptions();
 
 	inline void pauseRender() { this->render_state = RenderState_Pause; }
-	inline void resumeRender() { this->render_state = RenderState_Render; }
+	inline void resumeRender() { this->render_state = RenderState_Resume; }
 	inline void cancelRender() { this->render_state = RenderState_Cancel; }
-
-	/*inline void resetRender() {
-		this->render_interrupt = true;
-		this->accumulated_frames = 1;
-	}
-	inline void resetAccumulation() {
-		this->accumulated_frames = 1;
-	}*/
-
-	//inline void resetAccumulatedFrames() { this->accumulated_frames = 1; }
-	//inline void updateRandomRays(const Camera& c) { c.CalculateRandomDirections(this->aa_rays); }
 
 	enum {
 		RenderState_Render = 0,
-		RenderState_Cancel = 1,
-		RenderState_Pause = 2
+		RenderState_Pause = 1,
+		RenderState_Resume = RenderState_Render,
+		RenderState_Cancel = 2
 	};
 	enum {
 //		RenderMode_Raw = 0,
